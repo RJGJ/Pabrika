@@ -209,10 +209,21 @@ function close(): void {
   else void router.push(dest)
 }
 
+// Cold deep link: there is no previous in-app entry, so there is no originating card to return to.
+const openedCold = window.history.state?.back == null
+// `board.selectedRef` is cleared by the board view as soon as the route leaves the ticket, which is
+// before the sheet's close-auto-focus fires, so remember the last open ticket here.
+let lastRef: string | null = board.selectedRef
+watch(
+  () => board.selectedRef,
+  (r) => {
+    if (r) lastRef = r
+  },
+)
+
 /** Return focus to the originating card, or to the board heading after a cold deep link. */
 function onCloseAutoFocus(e: Event): void {
-  const ref = board.selectedRef
-  const card = ref ? document.querySelector<HTMLElement>(`[data-ticket-ref="${ref}"]`) : null
+  const card = !openedCold && lastRef ? document.querySelector<HTMLElement>(`[data-ticket-ref="${lastRef}"]`) : null
   const el = card ?? document.querySelector<HTMLElement>('h1')
   if (el) {
     e.preventDefault()

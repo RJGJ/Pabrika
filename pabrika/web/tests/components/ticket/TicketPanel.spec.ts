@@ -14,6 +14,7 @@ vi.mock('@/lib/toast', () => ({ notify: vi.fn() }))
 import { ApiError } from '@/api/client'
 import { comments as commentsApi } from '@/api/comments'
 import { tickets as ticketsApi } from '@/api/tickets'
+import { SheetContent } from '@/components/ui/sheet'
 import StatusSelect from '@/components/ticket/StatusSelect.vue'
 import TicketPanel from '@/components/ticket/TicketPanel.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -147,6 +148,38 @@ describe('TicketPanel', () => {
     esc()
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('board') // nothing to revert: closes
+  })
+
+  describe('focus return on close', () => {
+    async function closeWith(back: string | null, selectedAtClose: string | null) {
+      window.history.replaceState(back ? { back } : null, '')
+      const h1 = document.createElement('h1')
+      h1.tabIndex = -1
+      const card = document.createElement('a')
+      card.setAttribute('data-ticket-ref', 'WEB-1')
+      card.tabIndex = 0
+      card.focus = vi.fn()
+      h1.focus = vi.fn()
+      document.body.append(h1, card)
+      const { board } = await open('/p/WEB/t/1')
+      board.selectedRef = 'WEB-1'
+      await flushPromises()
+      board.selectedRef = selectedAtClose // the board view clears it when the route leaves the ticket
+      await flushPromises()
+      const ev = new Event('focus-return', { cancelable: true })
+      wrapper!.findComponent(SheetContent).vm.$emit('closeAutoFocus', ev)
+      return { h1, card, prevented: ev.defaultPrevented }
+    }
+    it('returns to the originating card even after selectedRef was cleared', async () => {
+      const r = await closeWith('/p/WEB', null)
+      expect(r.card.focus).toHaveBeenCalled()
+      expect(r.h1.focus).not.toHaveBeenCalled()
+    })
+    it('returns to the board heading after a cold deep link', async () => {
+      const r = await closeWith(null, null)
+      expect(r.h1.focus).toHaveBeenCalled()
+      expect(r.card.focus).not.toHaveBeenCalled()
+    })
   })
 
   it('follows the server copy when there is no unsaved draft', async () => {
