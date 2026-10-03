@@ -1,0 +1,8 @@
+{
+  "type": "ticket.moved",
+  "project_id": "01JABCDEF0000000000000P001",
+  "ticket_id": "01JABCDEF0000000000000T001",
+  "renumbered": false,
+  "actor": { "type": "api_token", "id": "01JABCDEF0000000000000K001" },
+  "at": "2026-10-03T09:00:00Z"
+}
