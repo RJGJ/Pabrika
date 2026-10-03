@@ -1,69 +1,95 @@
 // Command pabrika is the Pabrika server and CLI.
+//
+//	pabrika serve
+//	pabrika user create --email E --name N [--password-stdin]
+//	pabrika user reset-password [--password-stdin] EMAIL
+//	pabrika healthcheck
+//	pabrika version
+//
+// Exit codes: 0 success, 1 runtime error, 2 usage error. Messages go to stderr.
 package main
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/RJGJ/Pabrika/internal/config"
-	"github.com/RJGJ/Pabrika/internal/store"
+	"github.com/RJGJ/Pabrika/internal/auth"
 )
 
 // version is overridden at build time: -ldflags "-X main.version=1.2.3".
 var version = "dev"
 
-func main() {
-	os.Exit(run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
+// env is everything a command touches outside its arguments, so tests can inject it.
+type env struct {
+	getenv         func(string) string
+	stdin          io.Reader
+	stdout, stderr io.Writer
+	hashParams     auth.Params // argon2 cost; DefaultParams in production
 }
 
-func run(args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := run(ctx, os.Args[1:], env{
+		getenv: os.Getenv, stdin: os.Stdin, stdout: os.Stdout, stderr: os.Stderr,
+		hashParams: auth.DefaultParams,
+	})
+	stop()
+	os.Exit(code)
+}
+
+// run dispatches on the first argument and returns the process exit code.
+func run(ctx context.Context, args []string, e env) int {
+	if e.hashParams == (auth.Params{}) {
+		e.hashParams = auth.DefaultParams
+	}
 	if len(args) == 0 {
-		usage(stderr)
+		usage(e.stderr)
 		return 2
 	}
 	switch args[0] {
 	case "serve":
-		if err := serve(context.Background(), getenv, stderr); err != nil {
-			fmt.Fprintln(stderr, "pabrika: serve:", err)
+		if len(args) > 1 {
+			fmt.Fprintln(e.stderr, "pabrika: serve takes no arguments (configuration is by environment variables)")
+			return 2
+		}
+		if err := serve(ctx, e, defaultShutdownTimeout); err != nil {
+			fmt.Fprintln(e.stderr, "pabrika: serve:", err)
 			return 1
 		}
 		return 0
+	case "user":
+		return runUser(ctx, args[1:], e)
+	case "healthcheck":
+		return runHealthcheck(e.getenv, e.stderr, healthcheckTimeout)
 	case "version":
-		fmt.Fprintln(stdout, version)
+		fmt.Fprintln(e.stdout, version)
 		return 0
 	case "help", "-h", "--help":
-		usage(stdout)
+		usage(e.stdout)
 		return 0
 	default:
-		fmt.Fprintf(stderr, "pabrika: unknown command %q\n", args[0])
-		usage(stderr)
+		fmt.Fprintf(e.stderr, "pabrika: unknown command %q\n", args[0])
+		usage(e.stderr)
 		return 2
 	}
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: pabrika <command>\n\ncommands:\n  serve     start the server (phase 1: load config, open and migrate the database, exit)\n  version   print the version")
-}
+	fmt.Fprint(w, `usage: pabrika <command>
 
-// serve is a bootstrap in phase 1: config, open, migrate, log, exit. HTTP arrives in phase 2.
-func serve(ctx context.Context, getenv func(string) string, logOut io.Writer) error {
-	log := slog.New(slog.NewTextHandler(logOut, nil))
-	cfg, err := config.Load(getenv)
-	if err != nil {
-		return err
-	}
-	st, err := store.Open(ctx, cfg.DBPath)
-	if err != nil {
-		return err
-	}
-	defer st.Close()
-	v, err := st.Migrate(ctx)
-	if err != nil {
-		return err
-	}
-	log.Info("database ready", "path", cfg.DBPath, "schema_version", v, "version", version)
-	return nil
+commands:
+  serve                                          start the server (configured by environment variables)
+  user create --email E --name N [--password-stdin]
+                                                 create an account (works even when ALLOW_SIGNUP=false)
+  user reset-password [--password-stdin] EMAIL   set a new password and revoke the user's sessions
+  healthcheck                                    GET /healthz on 127.0.0.1:$PORT; exit 0 when healthy
+  version                                        print the version
+
+Flags must come before positional arguments. Passwords are never taken from arguments:
+use --password-stdin (one line on stdin) or the interactive prompt.
+`)
 }
