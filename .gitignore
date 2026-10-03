@@ -2,3 +2,8 @@
 .env
 .DS_Store
 *.log
+
+# web build output (keep the placeholder)
+pabrika/web/dist/*
+!pabrika/web/dist/.gitkeep
+pabrika/web/scripts/.mock-data/
