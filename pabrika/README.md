@@ -4,7 +4,7 @@ Pabrika is a small, self-hosted kanban board. Tickets live in projects that seve
 
 <!-- Screenshot placeholder (optional): docs/screenshot.png -->
 
-Status: the commands below follow the project specs in `specs/`. Anything that depends on code not yet written is accurate per spec and still to be verified (see `docs/smoke-test.md`).
+Status: the non-Docker paths (build, run, CLI, REST, MCP, shutdown, restart) were exercised against the real binary. The Docker image, proxy and backup steps were written from the specs and have **not been run yet**; `docs/smoke-test.md` lists exactly what was and was not verified.
 
 ## Features
 
@@ -38,12 +38,12 @@ Notes:
 
 ## Quick start (without Docker)
 
-Needs Go 1.23+ and Bun 1.x.
+Needs Go 1.25+ (the MCP SDK requires it) and Bun 1.x.
 
 ```bash
 cd web && bun install --frozen-lockfile && bun run build && cd ..
 CGO_ENABLED=0 go build -o pabrika ./cmd/pabrika
-COOKIE_SECURE=false ./pabrika serve
+COOKIE_SECURE=false ./pabrika serve     # on Windows build with -o pabrika.exe and run ./pabrika.exe serve
 ```
 
 This serves the UI, API and MCP endpoint on <http://localhost:8080>, with data in `./data/pabrika.db`. If `web/dist` was never built, the server still starts but non-API paths show a 503 "UI not built" page.
@@ -253,7 +253,7 @@ The release audit checklist is in [docs/security-audit.md](docs/security-audit.m
 
 ## Development
 
-Prerequisites: Go 1.23+, Bun 1.x. On Windows use Git Bash or WSL for the shell examples; `make` is optional.
+Prerequisites: Go 1.25+, Bun 1.x. On Windows use Git Bash or WSL for the shell examples; `make` is optional.
 
 ```bash
 # Run the API (BASE_URL must match the Vite origin) and the UI with hot reload
