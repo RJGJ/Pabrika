@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
+import { setEventSourceFactory, type EventSourceLike } from '@/api/events'
 import type { Label, Member, ProjectDetail, Role } from '@/api/types'
 
 vi.mock('@/api/projects', () => ({ projects: { get: vi.fn(), update: vi.fn(), remove: vi.fn(), list: vi.fn() } }))
@@ -22,6 +23,34 @@ import MembersTable from '@/components/settings/MembersTable.vue'
 import ProjectSettingsView from '@/views/ProjectSettingsView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectSettingsStore } from '@/stores/projectSettings'
+import { useBoardStore } from '@/stores/board'
+
+class FakeES implements EventSourceLike {
+  static all: FakeES[] = []
+  readyState = 0
+  onopen: ((ev: Event) => unknown) | null = null
+  onerror: ((ev: Event) => unknown) | null = null
+  closed = false
+  listeners = new Map<string, ((ev: MessageEvent) => void)[]>()
+  constructor(public url: string) {
+    FakeES.all.push(this)
+  }
+  addEventListener(t: string, l: (ev: MessageEvent) => void) {
+    this.listeners.set(t, [...(this.listeners.get(t) ?? []), l])
+  }
+  close() {
+    this.closed = true
+    this.readyState = 2
+  }
+  open() {
+    this.readyState = 1
+    this.onopen?.(new Event('open'))
+  }
+  emit(t: string, data: unknown) {
+    for (const l of this.listeners.get(t) ?? []) l({ data: JSON.stringify(data) } as MessageEvent)
+  }
+}
+setEventSourceFactory((url) => new FakeES(url))
 
 type M = Record<string, ReturnType<typeof vi.fn>>
 const pApi = projectsApi as unknown as M
@@ -64,6 +93,7 @@ afterEach(() => {
 })
 
 beforeEach(() => {
+  FakeES.all = []
   setActivePinia(createPinia())
   for (const m of [pApi, mApi, lApi]) for (const fn of Object.values(m)) fn.mockReset()
   vi.mocked(notify).mockReset()
@@ -313,5 +343,83 @@ describe('ProjectSettingsView', () => {
     await useProjectSettingsStore().applyEvent({ type: 'member.changed', project_id: 'P1' })
     await flushPromises()
     expect(w.text()).toContain('You no longer have access')
+  })
+
+  describe('live updates', () => {
+    async function mountReady(role: Role = 'owner') {
+      pApi.get.mockResolvedValue(project(role))
+      mApi.list.mockResolvedValue([member('u1', 'Ada', role), member('u2', 'Bob', 'viewer')])
+      lApi.list.mockResolvedValue([])
+      await router.push('/p/WEB/settings')
+      const w = mountIt(ProjectSettingsView)
+      await flushPromises()
+      return w
+    }
+
+    it('opens the stream once ready, reloads on open and applies events', async () => {
+      await mountReady()
+      expect(FakeES.all).toHaveLength(1)
+      expect(FakeES.all[0].url).toBe('/api/v1/projects/WEB/events')
+      mApi.list.mockClear()
+      FakeES.all[0].open()
+      await flushPromises()
+      expect(mApi.list).toHaveBeenCalledTimes(1) // quiet reload on open
+      mApi.list.mockResolvedValue([member('u1', 'Ada', 'owner')])
+      FakeES.all[0].emit('member.changed', { project_id: 'P1', actor: { type: 'api_token', id: 't' } })
+      await flushPromises()
+      expect(useProjectSettingsStore().members).toHaveLength(1)
+    })
+
+    it('closes the stream on unmount', async () => {
+      const w = await mountReady()
+      w.unmount()
+      mounted.length = 0
+      expect(FakeES.all[0].closed).toBe(true)
+    })
+
+    it('a 404 on a live refetch shows the lost access dialog and dismissing goes home', async () => {
+      await mountReady('viewer')
+      pApi.get.mockRejectedValue(new ApiError(404, 'not_found', 'nf'))
+      FakeES.all[0].emit('member.changed', { project_id: 'P1' })
+      await flushPromises()
+      expect(useBoardStore().lostAccess).toBe(true)
+      expect(document.body.querySelector('[role=dialog]')?.textContent).toContain('no longer have access')
+      expect(FakeES.all[0].closed).toBe(true)
+      dlgButton('Back to projects').click()
+      await flushPromises()
+      expect(router.currentRoute.value.path).toBe('/')
+    })
+
+    it('leaving closes the stream and shows no dialog, even on a late 404', async () => {
+      await mountReady('viewer')
+      pApi.list.mockResolvedValue([])
+      let closedDuringRemove = false
+      mApi.remove.mockImplementation(async () => {
+        closedDuringRemove = FakeES.all[0].closed
+        pApi.get.mockRejectedValue(new ApiError(404, 'not_found', 'nf'))
+        await useProjectSettingsStore().reloadProject() // a late 404 while leaving
+      })
+      const w = mountIt(MembersTable)
+      await w.find('[data-testid=leave-project]').trigger('click')
+      await flushPromises()
+      dlgButton('Leave project').click()
+      await flushPromises()
+      expect(closedDuringRemove).toBe(true)
+      expect(useBoardStore().lostAccess).toBe(false)
+      expect(router.currentRoute.value.path).toBe('/')
+    })
+
+    it('a failed leave reopens the stream and clears leaving', async () => {
+      await mountReady('viewer')
+      mApi.remove.mockRejectedValue(new ApiError(409, 'last_owner', 'x'))
+      const w = mountIt(MembersTable)
+      await w.find('[data-testid=leave-project]').trigger('click')
+      await flushPromises()
+      dlgButton('Leave project').click()
+      await flushPromises()
+      expect(FakeES.all).toHaveLength(2)
+      expect(FakeES.all[1].closed).toBe(false)
+      expect(useProjectSettingsStore().leaving).toBe(false)
+    })
   })
 })

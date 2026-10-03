@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import LostAccessDialog from '@/components/common/LostAccessDialog.vue'
+import { useProjectEvents } from '@/composables/useProjectEvents'
 import { useProjectSettingsStore } from '@/stores/projectSettings'
 
-// Live updates: the events composable (wired by the coordinator) should call
-// `store.registerStream({ close, reopen })` and forward every event to `store.applyEvent(ev)`.
 const route = useRoute()
 const store = useProjectSettingsStore()
 
@@ -24,7 +24,24 @@ watch(
   { immediate: true },
 )
 
-onBeforeUnmount(() => store.reset())
+// Live updates share the board's stream logic; leave and delete close the stream first.
+const events = useProjectEvents(
+  () => (typeof route.params.key === 'string' ? route.params.key : null),
+  {
+    ready: () => store.loadState === 'ready',
+    lost: () => store.loadState === 'no-access',
+    setLive: () => {},
+    onEvent: (e) => void store.applyEvent(e),
+    onOpen: () => void store.refresh(),
+    onLostAccess: () => store.handleLostAccess(),
+  },
+)
+store.registerStream(events)
+
+onBeforeUnmount(() => {
+  store.registerStream(null)
+  store.reset()
+})
 
 function retry() {
   const key = route.params.key
@@ -78,5 +95,6 @@ function retry() {
         <TabsContent value="labels" class="pt-4"><LabelsManager /></TabsContent>
       </Tabs>
     </template>
+    <LostAccessDialog />
   </div>
 </template>
