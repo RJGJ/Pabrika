@@ -18,6 +18,7 @@ import (
 	"github.com/RJGJ/Pabrika/internal/auth"
 	"github.com/RJGJ/Pabrika/internal/config"
 	"github.com/RJGJ/Pabrika/internal/httpapi"
+	"github.com/RJGJ/Pabrika/internal/mcpserver"
 	"github.com/RJGJ/Pabrika/internal/service"
 	"github.com/RJGJ/Pabrika/internal/store"
 	"github.com/RJGJ/Pabrika/web"
@@ -177,10 +178,12 @@ func serve(ctx context.Context, e env, shutdownTimeout time.Duration) error {
 	hub := service.NewHub(service.HubOptions{Logger: log})
 	svc := service.New(st, service.Deps{Publisher: hub, Streams: hub})
 	sessions := auth.NewSessions(st, auth.SessionOptions{CookieSecure: cfg.CookieSecure, Logger: log})
+	resolver := auth.NewResolver(auth.ResolverDeps{Store: st, Sessions: sessions, Logger: log})
 	api := httpapi.New(httpapi.Deps{
-		Config: cfg, Store: st, Services: svc, Logger: log, Sessions: sessions,
+		Config: cfg, Store: st, Services: svc, Logger: log, Sessions: sessions, Resolver: resolver,
 		Hasher: auth.NewHasher(e.hashParams, auth.DefaultConcurrency), Hub: hub,
 	})
+	mcpserver.Mount(api, mcpserver.Deps{Services: svc, Resolver: resolver, BaseURL: cfg.BaseURL, Logger: log})
 
 	attachUI(api, log)
 
