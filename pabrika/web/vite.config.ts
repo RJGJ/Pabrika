@@ -31,5 +31,8 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['tests/**/*.{test,spec}.ts'],
     globals: false,
+    // First test in a file may import the whole app; jsdom startup on Windows exceeds the 5 s default.
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
 })
