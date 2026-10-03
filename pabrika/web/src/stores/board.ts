@@ -151,7 +151,6 @@ export const useBoardStore = defineStore('board', () => {
     for (const s of statuses) next[s]++
     columnKeys.value = next
   }
-  const bumpAllKeys = () => bumpKeys(...STATUSES)
 
   const mutationOf = (id: string): number => mutations.get(id) ?? 0
   const bumpMutation = (id: string): void => void mutations.set(id, mutationOf(id) + 1)
@@ -177,10 +176,13 @@ export const useBoardStore = defineStore('board', () => {
       byId[tmp.id] = tmp
       cols[tmp.status].push(tmp.id)
     }
+    const changed = STATUSES.filter(
+      (s) => cols[s].length !== columns.value[s].length || cols[s].some((id, i) => id !== columns.value[s][i]),
+    )
     ticketsById.value = byId
     columns.value = cols
     ticketsLoaded.value = true
-    bumpAllKeys()
+    bumpKeys(...changed) // unchanged columns keep their Sortable instance
   }
 
   function handleLoadError(e: unknown, quiet: boolean): void {

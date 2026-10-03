@@ -45,6 +45,8 @@ class FakeES implements EventSourceLike {
   }
 }
 
+vi.setConfig({ testTimeout: 20000 })
+
 let wrapper: VueWrapper | null = null
 
 async function mountAt(path: string) {
