@@ -1,0 +1,18 @@
+{
+  "action": "updated",
+  "actor": {
+    "bot": false,
+    "id": "01JTESTTESTTESTTESTTESTTES",
+    "name": "Alice",
+    "type": "user"
+  },
+  "changes": {
+    "priority": [
+      "high",
+      "low"
+    ]
+  },
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "id": "01JTESTTESTTESTTESTTESTTES",
+  "ticket_id": "01JTESTTESTTESTTESTTESTTES"
+}

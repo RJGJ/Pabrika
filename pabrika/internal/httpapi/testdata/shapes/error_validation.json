@@ -1,0 +1,9 @@
+{
+  "error": {
+    "code": "validation_failed",
+    "fields": {
+      "title": "must not be empty"
+    },
+    "message": "must not be empty"
+  }
+}
