@@ -1,0 +1,18 @@
+{
+  "auth": {
+    "method": "token",
+    "token": {
+      "id": "01JTESTTESTTESTTESTTESTTES",
+      "name": "token F39HNX",
+      "project_id": null,
+      "project_key": null,
+      "scope": "write"
+    }
+  },
+  "user": {
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "display_name": "Alice",
+    "email": "alice@example.com",
+    "id": "01JTESTTESTTESTTESTTESTTES"
+  }
+}
