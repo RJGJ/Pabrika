@@ -9,6 +9,9 @@ import (
 )
 
 type Querier interface {
+	// Login lookup. users.email is COLLATE NOCASE, so the match is case-insensitive.
+	AccountGetCredentialsByEmail(ctx context.Context, email string) (AccountGetCredentialsByEmailRow, error)
+	AccountGetPasswordHash(ctx context.Context, id string) (string, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -33,6 +36,24 @@ type Querier interface {
 	SeedMember(ctx context.Context, arg SeedMemberParams) error
 	// Direct inserts used by internal/testutil to seed data without going through services.
 	SeedProject(ctx context.Context, arg SeedProjectParams) (Project, error)
+	SessionDeleteAllForUser(ctx context.Context, userID string) (int64, error)
+	SessionDeleteByHash(ctx context.Context, tokenHash string) (int64, error)
+	// Timestamps are fixed-width text, so string comparison is chronological.
+	SessionDeleteExpired(ctx context.Context, expiresAt string) (int64, error)
+	SessionExtend(ctx context.Context, arg SessionExtendParams) (int64, error)
+	// One session joined with its user. Expiry is judged by the caller (it owns the clock).
+	SessionGetByHash(ctx context.Context, tokenHash string) (SessionGetByHashRow, error)
+	TokenCountActive(ctx context.Context, userID string) (int64, error)
+	// API token by the SHA-256 of its secret, with owner and (optional) limited project key.
+	TokenGetByHash(ctx context.Context, tokenHash string) (TokenGetByHashRow, error)
+	TokenGetForUser(ctx context.Context, arg TokenGetForUserParams) (TokenGetForUserRow, error)
+	// Newest first, revoked included.
+	TokenListForUser(ctx context.Context, userID string) ([]TokenListForUserRow, error)
+	// Sets revoked_at only when still NULL. Rows affected is 1 for an existing own token even
+	// when it was already revoked (idempotent), 0 for unknown or someone else's.
+	TokenRevoke(ctx context.Context, arg TokenRevokeParams) (int64, error)
+	// Stamps last_used_at only when never used or last used before the threshold (now minus 60 s).
+	TokenTouch(ctx context.Context, arg TokenTouchParams) (int64, error)
 	UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error)
 }

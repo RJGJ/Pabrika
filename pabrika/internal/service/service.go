@@ -30,6 +30,7 @@ type Services struct {
 	Comments CommentService
 	Activity ActivityService
 	Users    UserService
+	Tokens   TokenService
 
 	st   *store.Store
 	deps Deps
@@ -57,6 +58,7 @@ func New(st *store.Store, deps Deps) *Services {
 	s.Comments = &commentService{s: s}
 	s.Activity = &activityService{s: s}
 	s.Users = &userService{s: s}
+	s.Tokens = &tokenService{s: s}
 	return s
 }
 
