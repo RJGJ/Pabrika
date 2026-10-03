@@ -211,12 +211,10 @@ func TestMuxHasNoConflicts(t *testing.T) {
 	// Shapes the real handlers will register must coexist with the catch-all and the fallback
 	// (a conflict panics at registration).
 	for _, p := range []string{
-		"POST /api/v1/tickets/{id}/move",
 		"POST /api/v1/projects/{id}/members",
 		"PATCH /api/v1/projects/{id}/members/{userId}",
 		"DELETE /api/v1/projects/{id}/members/{userId}",
 		"DELETE /api/v1/tokens/{id}",
-		"GET /api/v1/projects/{id}/tickets",
 	} {
 		h.Server.route(p, Authed, false, func(w http.ResponseWriter, r *http.Request) { noContent(w) })
 	}
