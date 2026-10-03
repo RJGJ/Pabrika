@@ -1,16 +1,8 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
-Guidance for Claude Code when working in this repository.
+All code, build and test commands, conventions and gotchas live in [pabrika/CLAUDE.md](pabrika/CLAUDE.md). Read it first.
 
-## Project
-
-Pabrika — newly initialized project. Update this file as the stack and conventions are decided.
-
-## Commands
-
-No build, test, or lint commands yet. Add them here once they exist.
-
-## Conventions
-
-- Keep commits small and focused with clear messages.
-- Update README.md when setup steps or structure change.
+- The Go module root is the `pabrika/` folder (next to `go.mod`); run Go, Bun and Docker commands from there.
+- User-facing documentation is [pabrika/README.md](pabrika/README.md).
+- Specs are in `pabrika/specs/`, with `pabrika/specs/phases.md` first (its Decisions sections override everything else); plans are in `pabrika/plans/`.
+- Keep commits small and focused. Update the docs in `pabrika/` when setup steps or structure change.
