@@ -45,6 +45,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, http.StatusBadRequest, httpapi.CodeBodyTooLarge, "Request body too large")
 		return
 	}
+	// originAllowed matched this Origin to BASE_URL case-insensitively and with default ports
+	// normalised; the SDK's own check compares exactly, so hand it the canonical spelling.
+	if _, ok := r.Header["Origin"]; ok {
+		r.Header.Set("Origin", h.origin)
+	}
 	r = r.WithContext(auth.WithPrincipal(r.Context(), p))
 	h.sdk.ServeHTTP(&noStoreWriter{ResponseWriter: w}, r)
 }

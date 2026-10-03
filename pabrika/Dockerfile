@@ -11,7 +11,7 @@ COPY web/ .
 RUN bun run build
 
 # Stage 2: build the Go binary with the UI embedded (web/embed.go: go:embed all:dist).
-FROM golang:1.23 AS server
+FROM golang:1.25 AS server
 ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
