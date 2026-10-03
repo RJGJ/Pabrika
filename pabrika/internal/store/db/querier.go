@@ -20,6 +20,13 @@ type Querier interface {
 	GetProjectForUser(ctx context.Context, arg GetProjectForUserParams) (GetProjectForUserRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
+	LabelDelete(ctx context.Context, id string) error
+	LabelGet(ctx context.Context, id string) (Label, error)
+	LabelInsert(ctx context.Context, arg LabelInsertParams) (Label, error)
+	LabelList(ctx context.Context, projectID string) ([]Label, error)
+	// True when another label (id <> exclude_id; pass '' for none) of the project has the name (NOCASE column).
+	LabelNameTaken(ctx context.Context, arg LabelNameTakenParams) (bool, error)
+	LabelUpdate(ctx context.Context, arg LabelUpdateParams) (Label, error)
 	ListSessionHashesForUser(ctx context.Context, userID string) ([]string, error)
 	ListUsersByIDs(ctx context.Context, ids []string) ([]User, error)
 	// Owning ticket and project of a live comment on a live ticket.
@@ -29,6 +36,28 @@ type Querier interface {
 	LocateTicketByID(ctx context.Context, id string) (LocateTicketByIDRow, error)
 	// Same, by project key (uppercase) and ticket number.
 	LocateTicketByRef(ctx context.Context, arg LocateTicketByRefParams) (LocateTicketByRefRow, error)
+	// Unassigns the user from every ticket of the project, soft-deleted ones included.
+	MemberClearAssignee(ctx context.Context, arg MemberClearAssigneeParams) (int64, error)
+	MemberCountOwners(ctx context.Context, projectID string) (int64, error)
+	MemberDelete(ctx context.Context, arg MemberDeleteParams) (int64, error)
+	MemberGet(ctx context.Context, arg MemberGetParams) (MemberGetRow, error)
+	MemberInsert(ctx context.Context, arg MemberInsertParams) error
+	MemberInsertActivity(ctx context.Context, arg MemberInsertActivityParams) error
+	// Owners first, then display name (case-insensitive), then user id.
+	MemberList(ctx context.Context, projectID string) ([]MemberListRow, error)
+	// Live tickets of the project currently assigned to the user (for the activity rows).
+	MemberListLiveAssignedTickets(ctx context.Context, arg MemberListLiveAssignedTicketsParams) ([]string, error)
+	MemberUpdateRole(ctx context.Context, arg MemberUpdateRoleParams) (int64, error)
+	ProjectDelete(ctx context.Context, id string) error
+	ProjectInsert(ctx context.Context, arg ProjectInsertParams) (Project, error)
+	ProjectInsertOwner(ctx context.Context, arg ProjectInsertOwnerParams) error
+	ProjectKeyExists(ctx context.Context, key string) (bool, error)
+	// Member projects ordered by lower(name), then key. only_project ('' = no limit) serves
+	// project-limited tokens; include_archived 0 hides archived projects.
+	ProjectListForUser(ctx context.Context, arg ProjectListForUserParams) ([]ProjectListForUserRow, error)
+	// Live (not soft-deleted) ticket counts per project and status.
+	ProjectStatusCounts(ctx context.Context, projectIds []string) ([]ProjectStatusCountsRow, error)
+	ProjectUpdate(ctx context.Context, arg ProjectUpdateParams) (Project, error)
 	SeedArchiveProject(ctx context.Context, arg SeedArchiveProjectParams) error
 	SeedMember(ctx context.Context, arg SeedMemberParams) error
 	// Direct inserts used by internal/testutil to seed data without going through services.
