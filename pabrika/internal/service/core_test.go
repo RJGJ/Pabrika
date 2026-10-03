@@ -387,7 +387,7 @@ func TestUpdateProfile(t *testing.T) {
 func TestStubsReturnNotImplemented(t *testing.T) {
 	env := testutil.NewTestServices(t)
 	a := service.UserActor("x")
-	if _, err := env.Svc.Projects.Get(ctx, a, "WEB"); err == nil || errors.Is(err, service.ErrNotFound) {
+	if _, err := env.Svc.Tickets.Get(ctx, a, "WEB-1"); err == nil || errors.Is(err, service.ErrNotFound) {
 		t.Fatal("stub should return a plain not-implemented error")
 	}
 }
