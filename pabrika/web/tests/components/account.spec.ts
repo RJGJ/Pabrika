@@ -15,6 +15,7 @@ vi.mock('@/lib/toast', () => ({ notify: vi.fn() }))
 import { auth as authApi } from '@/api/auth'
 import { tokens as tokensApi } from '@/api/tokens'
 import { projects as projectsApi } from '@/api/projects'
+import { DialogContent } from '@/components/ui/dialog'
 import { notify } from '@/lib/toast'
 import { setRouter } from '@/router/instance'
 import ChangePasswordForm from '@/components/account/ChangePasswordForm.vue'
@@ -258,6 +259,22 @@ describe('token flow', () => {
     expect(s.snippetSecret).toBeNull()
     expect(document.body.querySelector('[data-testid=token-secret]')).toBeNull()
     expect(JSON.stringify(localStorage) + JSON.stringify(sessionStorage)).not.toContain('pb_supersecret')
+  })
+
+  it('closing the secret dialog returns focus to the New token button', async () => {
+    setupProjects()
+    tApi.create.mockResolvedValue({ token: token('n'), secret: 'pb_x' })
+    const btn = document.createElement('button')
+    btn.setAttribute('data-testid', 'new-token')
+    document.body.append(btn)
+    const focus = vi.spyOn(btn, 'focus')
+    const w = mountIt(TokenSecretDialog)
+    await useTokensStore().create({ name: 'n', scope: 'read' })
+    await flushPromises()
+    const ev = new Event('closeAutoFocus', { cancelable: true })
+    w.findComponent(DialogContent).vm.$emit('closeAutoFocus', ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(focus).toHaveBeenCalled()
   })
 
   it('copy writes the secret to the clipboard', async () => {

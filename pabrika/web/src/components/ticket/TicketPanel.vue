@@ -103,6 +103,14 @@ watch(
   },
 )
 
+/** Escape reverts an edited title first; with nothing to revert it falls through and closes the panel. */
+function onTitleEscape(e: KeyboardEvent): void {
+  const current = detail.ticket.value?.title ?? view.value?.title ?? ''
+  if (titleDraft.value === current) return
+  e.preventDefault()
+  reloadTitle()
+}
+
 function reloadTitle(): void {
   titleDraft.value = detail.ticket.value?.title ?? view.value?.title ?? ''
   titleRemote.value = false
@@ -201,10 +209,21 @@ function close(): void {
   else void router.push(dest)
 }
 
+// Cold deep link: there is no previous in-app entry, so there is no originating card to return to.
+const openedCold = window.history.state?.back == null
+// `board.selectedRef` is cleared by the board view as soon as the route leaves the ticket, which is
+// before the sheet's close-auto-focus fires, so remember the last open ticket here.
+let lastRef: string | null = board.selectedRef
+watch(
+  () => board.selectedRef,
+  (r) => {
+    if (r) lastRef = r
+  },
+)
+
 /** Return focus to the originating card, or to the board heading after a cold deep link. */
 function onCloseAutoFocus(e: Event): void {
-  const ref = board.selectedRef
-  const card = ref ? document.querySelector<HTMLElement>(`[data-ticket-ref="${ref}"]`) : null
+  const card = !openedCold && lastRef ? document.querySelector<HTMLElement>(`[data-ticket-ref="${lastRef}"]`) : null
   const el = card ?? document.querySelector<HTMLElement>('h1')
   if (el) {
     e.preventDefault()
@@ -255,7 +274,7 @@ const PRIORITY_LABEL: Record<string, string> = { low: 'Low', medium: 'Medium', h
                 :aria-invalid="titleError ? true : undefined"
                 @blur="saveTitle"
                 @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
-                @keydown.esc.prevent="reloadTitle"
+                @keydown.esc="onTitleEscape"
               />
               <p v-if="titleError" role="alert" class="text-xs text-destructive">{{ titleError }}</p>
               <Alert v-if="titleRemote">

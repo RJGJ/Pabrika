@@ -32,6 +32,15 @@ async function copy() {
   }
 }
 
+/** This dialog has no trigger of its own (it opens after the create dialog closed): focus "New token". */
+function returnFocus(e: Event) {
+  const btn = document.querySelector<HTMLElement>('[data-testid=new-token]')
+  if (btn) {
+    e.preventDefault()
+    btn.focus()
+  }
+}
+
 function useInSnippet() {
   tokens.useSecretInSnippet()
   open.value = false
@@ -40,7 +49,7 @@ function useInSnippet() {
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent data-testid="token-secret-dialog">
+    <DialogContent data-testid="token-secret-dialog" @close-auto-focus="returnFocus">
       <DialogHeader>
         <DialogTitle>Token created</DialogTitle>
         <DialogDescription>Copy the token for "{{ tokens.secret?.tokenName }}" now.</DialogDescription>

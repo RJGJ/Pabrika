@@ -25,8 +25,8 @@ export interface StreamControl {
  * Live-update hook for the coordinator (events composable):
  *  - `applyEvent(ev)`: feed every stream event here. Ticket and comment events are ignored.
  *    `project.updated` refetches the project, `label.changed` the labels, `member.changed` the
- *    members and the project (the role may have changed). A 404 on a project-level refetch sets
- *    `loadState = 'no-access'` (lost access), unless `leaving` is set.
+ *    members and the project (the role may have changed). A 404 on a project-level refetch is lost
+ *    access (dialog via the board store's `lostAccess`), unless `leaving` is set.
  *  - `leaving`: true while this user is deleting or leaving the project; the lost-access path must
  *    stay silent (no dialog) while it is set.
  *  - `registerStream(ctl | null)`: optional; `deleteProject` and `leave` call `ctl.close()` before the
@@ -93,7 +93,26 @@ export const useProjectSettingsStore = defineStore('projectSettings', () => {
 
   /** A 404 on a project-level refetch means the project is gone or we were removed. */
   function noteLostAccess(e: unknown): void {
-    if (e instanceof ApiError && e.status === 404 && !leaving.value) loadState.value = 'no-access'
+    if (e instanceof ApiError && e.status === 404) handleLostAccess()
+  }
+
+  /**
+   * Access is gone (removed, or the project was deleted by someone else): show the shared
+   * LostAccessDialog and take the project off the sidebar. Silent while `leaving`.
+   */
+  function handleLostAccess(): void {
+    if (leaving.value) return
+    ac?.abort()
+    const id = project.value?.id
+    loadState.value = 'no-access'
+    if (id) useProjectsStore().remove(id)
+    useBoardStore().lostAccess = true
+  }
+
+  /** Quiet reload of everything, used on every stream (re)open. */
+  async function refresh(): Promise<void> {
+    if (loadState.value !== 'ready') return
+    await Promise.all([reloadProject(), reloadMembers(), reloadLabels()])
   }
 
   async function reloadProject(): Promise<void> {
@@ -232,7 +251,7 @@ export const useProjectSettingsStore = defineStore('projectSettings', () => {
   return {
     key, project, members, labels, loadState, leaving,
     role, isArchived, isOwner, isViewer, canManageProject, canManageLabels,
-    registerStream, load, reloadProject, reloadMembers, reloadLabels, applyEvent,
+    registerStream, load, refresh, handleLostAccess, reloadProject, reloadMembers, reloadLabels, applyEvent,
     updateProject, addMember, setMemberRole, removeMember, leave, deleteProject,
     createLabel, updateLabel, deleteLabel, reset,
   }
