@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "comment_count": 0,
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "description": "",
+  "due_date": null,
+  "id": "01JTESTTESTTESTTESTTESTTES",
+  "labels": [],
+  "number": 1,
+  "position": 1024,
+  "priority": "medium",
+  "project_id": "01JTESTTESTTESTTESTTESTTES",
+  "project_key": "WEB",
+  "ref": "WEB-1",
+  "status": "todo",
+  "title": "Plain",
+  "updated_at": "2026-01-01T00:00:00.000Z"
+}
