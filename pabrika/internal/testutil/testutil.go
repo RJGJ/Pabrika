@@ -143,6 +143,9 @@ type Env struct {
 	Clock   *FakeClock
 	Pub     *RecordingPublisher
 	Streams *RecordingStreams
+	// Hub is the real event hub when the env was built WithHub (Pub and Streams then stay
+	// unused recorders); nil otherwise.
+	Hub *service.Hub
 	// NewID is the id source shared with the services (monotonic, deterministic).
 	NewID func() string
 }
@@ -153,14 +156,25 @@ type User struct{ ID, Email, DisplayName string }
 // Project is a seeded project.
 type Project struct{ ID, Key string }
 
+// Option customizes NewTestServices.
+type Option func(*options)
+
+type options struct{ hub *service.HubOptions }
+
+// WithHub wires one real *service.Hub as both Deps.Publisher and Deps.Streams and exposes it as
+// env.Hub. Without it the recording publisher and stream control are used.
+func WithHub(opts service.HubOptions) Option {
+	return func(o *options) { o.hub = &opts }
+}
+
 // NewTestServices builds an Env on an in-memory database (single connection).
-func NewTestServices(t testing.TB) *Env {
+func NewTestServices(t testing.TB, opts ...Option) *Env {
 	t.Helper()
 	st, err := store.OpenMemory(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return newEnv(t, st)
+	return newEnv(t, st, opts...)
 }
 
 // NewFileEnv builds an Env on a temp-dir file database (write pool of one, read pool of several);
@@ -174,8 +188,12 @@ func NewFileEnv(t testing.TB) *Env {
 	return newEnv(t, st)
 }
 
-func newEnv(t testing.TB, st *store.Store) *Env {
+func newEnv(t testing.TB, st *store.Store, opts ...Option) *Env {
 	t.Helper()
+	var o options
+	for _, fn := range opts {
+		fn(&o)
+	}
 	t.Cleanup(func() { st.Close() })
 	if _, err := st.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
@@ -184,13 +202,15 @@ func newEnv(t testing.TB, st *store.Store) *Env {
 	pub := &RecordingPublisher{}
 	streams := &RecordingStreams{}
 	newID := service.NewULIDSource(clock.Now, rand.New(rand.NewSource(42)))
-	svc := service.New(st, service.Deps{
-		Clock:     clock.Now,
-		NewID:     newID,
-		Publisher: pub,
-		Streams:   streams,
-	})
-	return &Env{Store: st, Svc: svc, Clock: clock, Pub: pub, Streams: streams, NewID: newID}
+	deps := service.Deps{Clock: clock.Now, NewID: newID, Publisher: pub, Streams: streams}
+	var hub *service.Hub
+	if o.hub != nil {
+		hub = service.NewHub(*o.hub)
+		deps.Publisher, deps.Streams = hub, hub
+		t.Cleanup(hub.Shutdown)
+	}
+	svc := service.New(st, deps)
+	return &Env{Store: st, Svc: svc, Clock: clock, Pub: pub, Streams: streams, Hub: hub, NewID: newID}
 }
 
 func (e *Env) now() string { return store.FormatTime(e.Clock.Now()) }
