@@ -774,6 +774,6 @@ export const useBoardStore = defineStore('board', () => {
     ticketByNumber, setFilters,
     load, reload, refetchProject, handleLostAccess, acknowledgeLostAccess,
     createTicket, updateTicket, deleteTicket, moveTicket, startDrag, endDrag,
-    refreshTicket, applyEvent, reset,
+    refreshTicket, applyEvent, reset, adopt: upsert,
   }
 })
