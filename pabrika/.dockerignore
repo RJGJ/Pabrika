@@ -1,0 +1,32 @@
+# Version control and tooling
+.git
+.claude
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Docs, specs and plans (nothing in the build reads them)
+**/*.md
+specs
+plans
+docs
+
+# Local data and databases
+data
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.db-journal
+
+# Web: dependencies and output are rebuilt inside the image
+**/node_modules
+web/dist
+
+# Locally built binaries
+pabrika
+pabrika.exe
+**/*.exe
+
+# Must NOT be ignored: go.mod, go.sum, web/package.json, web/bun.lock,
+# web/embed.go, migrations/ (including *.sql), sqlc.yaml.

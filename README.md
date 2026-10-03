@@ -1,22 +1,10 @@
-﻿# Pabrika
+# Pabrika
 
-A new project. Description coming soon.
+Pabrika is a small, self-hosted kanban board with an MCP server, so people and AI agents can work on the same tickets. Go backend, SQLite, Vue frontend, shipped as one Docker container.
 
-## Getting Started
+The project lives in the [`pabrika/`](pabrika/) folder (the Go module root):
 
-```bash
-git clone git@github.com:RJGJ/Pabrika.git
-cd Pabrika
-```
-
-## Project Structure
-
-```
-Pabrika/
-├── README.md   # Project overview
-└── CLAUDE.md   # Guidance for Claude Code
-```
-
-## License
-
-TBD
+- [pabrika/README.md](pabrika/README.md): what it is, quick start, configuration, MCP setup, proxy, backups, security notes.
+- [pabrika/CLAUDE.md](pabrika/CLAUDE.md): layout, commands, conventions and gotchas for working on the code.
+- [pabrika/specs/](pabrika/specs/): the main spec and per-phase specs.
+- [pabrika/LICENSE](pabrika/LICENSE): MIT.
