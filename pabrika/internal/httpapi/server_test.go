@@ -211,7 +211,7 @@ func TestMuxHasNoConflicts(t *testing.T) {
 	// Shapes the real handlers will register must coexist with the catch-all and the fallback
 	h.Server.Mount("/", Public, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	h.Server.MountRaw("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	h.Server.Mount("GET /api/v1/projects/{id}/events", SessionOnly, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	// The events route is registered by New (events.go); TestEventsRouteIsSessionOnly covers it.
 }
 
 func TestFallbackAndWellKnown(t *testing.T) {

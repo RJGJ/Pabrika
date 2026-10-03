@@ -87,6 +87,7 @@ type Server struct {
 	resolver *auth.Resolver
 	hasher   *auth.Hasher
 	hub      *service.Hub
+	events   *eventsHandler // SSE handler (events.go); tests tune its intervals
 
 	loginLimiter, signupLimiter, passwordLimiter *auth.Limiter
 
@@ -177,6 +178,7 @@ func (s *Server) registerRoutes() {
 	s.registerLabelRoutes()
 	s.registerTicketRoutes()
 	s.registerCommentRoutes()
+	s.registerEventRoutes()
 }
 
 // handle adds rt to the route table and the mux under the route guard. Handler agents call
