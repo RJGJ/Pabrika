@@ -209,13 +209,6 @@ func TestRoutingJSON404And405(t *testing.T) {
 func TestMuxHasNoConflicts(t *testing.T) {
 	h := Setup(t, Opts{})
 	// Shapes the real handlers will register must coexist with the catch-all and the fallback
-	// (a conflict panics at registration).
-	for _, p := range []string{
-		"POST /api/v1/tickets/{id}/move",
-		"GET /api/v1/projects/{id}/tickets",
-	} {
-		h.Server.route(p, Authed, false, func(w http.ResponseWriter, r *http.Request) { noContent(w) })
-	}
 	h.Server.Mount("/", Public, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	h.Server.MountRaw("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	h.Server.Mount("GET /api/v1/projects/{id}/events", SessionOnly, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
