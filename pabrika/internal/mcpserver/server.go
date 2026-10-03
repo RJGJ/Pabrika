@@ -28,8 +28,12 @@
 //
 // # SDK spike (T0) results, github.com/modelcontextprotocol/go-sdk v1.3.1
 //
-// v1.3.1 is the newest release whose go.mod says go 1.23.0 (v1.4.0 needs 1.24, v1.4.1 and
-// later 1.25). Findings against the S1..S11 table of the plan:
+// The spike was done on v1.3.1, the newest release whose go.mod says go 1.23.0. Phase 6
+// moved to v1.4.1 (go 1.25.0, Dockerfile golang:1.25) because govulncheck reports three
+// vulnerabilities (GO-2026-5771, GO-2026-4773, GO-2026-4770) in v1.3.1 that the /mcp code path
+// reaches. v1.4 adds a Host/Origin cross-origin check of its own; NewHandler trusts BASE_URL's
+// origin there and passes the canonical Origin spelling, our Origin rule stays the real gate.
+// Findings against the S1..S11 table of the plan:
 //
 //	S1  OK   NewStreamableHTTPHandler(getServer, {Stateless: true}) calls getServer per request.
 //	S2  OK   JSONResponse: true gives plain application/json replies.
@@ -92,7 +96,16 @@ func NewHandler(d Deps) http.Handler {
 	if h.origin == "" {
 		h.origin = config.Config{BaseURL: d.BaseURL}.Origin()
 	}
-	h.sdk = mcp.NewStreamableHTTPHandler(h.getServer, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	// The SDK (v1.4+) runs its own cross-origin check against the Host header. Our Origin rule
+	// (ServeHTTP) already allows only BASE_URL's origin, so that origin is trusted here; any
+	// other Origin never reaches the SDK.
+	cop := &http.CrossOriginProtection{}
+	if err := cop.AddTrustedOrigin(h.origin); err != nil {
+		d.Logger.Warn("mcp: cannot trust BASE_URL origin in the SDK cross-origin check", "origin", h.origin, "err", err)
+	}
+	h.sdk = mcp.NewStreamableHTTPHandler(h.getServer, &mcp.StreamableHTTPOptions{
+		Stateless: true, JSONResponse: true, CrossOriginProtection: cop,
+	})
 	return h
 }
 

@@ -4,7 +4,7 @@ Guidance for Claude Code when working in `pabrika/` (the Go module root, next to
 
 Pabrika is a self-hosted kanban board with an MCP server: Go backend, SQLite, Vue frontend, one binary, one container. `README.md` is the user-facing guide; this file is for working on the code.
 
-Status note: commands below follow the specs. Verify each against the actual code (`Makefile`, `web/package.json`) when it exists, and fix this file if they differ.
+Status note: the Go, web and CLI commands below were each run once on Windows (Git Bash, Go 1.27, Bun 1.4). `make` was not installed there, so the Makefile targets are plain command lines that were run by hand; `docker build` has not been run.
 
 ## Layout
 
@@ -21,6 +21,7 @@ internal/
 migrations/        embedded goose SQL
 web/               Vue app (Bun, Vite); web/embed.go embeds web/dist
 docs/              proxy, backup, security audit, smoke test
+scripts/           audit.sh (the runnable part of the security audit, `make audit`)
 specs/ plans/      specs and implementation plans (see below)
 ```
 
@@ -29,12 +30,12 @@ Rule: the service layer has no knowledge of HTTP or MCP. REST handlers and MCP t
 ## Build
 
 ```bash
-cd web && bun install --frozen-lockfile && bun run build     # writes web/dist
-CGO_ENABLED=0 go build -o pabrika ./cmd/pabrika
-docker build --build-arg VERSION=dev -t pabrika .
+cd web && bun install --frozen-lockfile && bun run build     # writes web/dist, ends with check:dist
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=dev" -o pabrika ./cmd/pabrika   # embeds web/dist
+docker build --build-arg VERSION=dev -t pabrika .             # needs Docker; not run yet
 ```
 
-Makefile shortcuts (optional on Windows): `make web`, `make build`, `make docker`, `make run`, `make test`, `make audit`, `make generate`.
+Makefile shortcuts (optional on Windows): `make web`, `make build` (bin/pabrika, version from `git describe`), `make compile` (`go build ./...`), `make docker`, `make run`, `make test` (Go and web), `make audit` (`sh scripts/audit.sh`), `make generate`. `AUDIT_SKIP_TESTS=1` and `AUDIT_OFFLINE=1` shorten the audit.
 
 ## Test
 
@@ -86,6 +87,8 @@ go run ./cmd/pabrika version
 - No `WriteTimeout` on the HTTP server (it would cut streams).
 - Vite dev needs `BASE_URL=http://localhost:5173` or the Origin check returns 403.
 - `go test -race` needs CGO; the default test gate does not.
+- Go 1.25+ is required: MCP SDK v1.4.1 (needed to clear govulncheck findings in v1.3.1) declares `go 1.25.0`, so the Dockerfile uses `golang:1.25`. Do not downgrade the SDK; re-run `govulncheck ./...` after bumping dependencies.
+- Windows has no SIGTERM: Ctrl+C (or CTRL_BREAK to a process group) triggers the same graceful shutdown; `kill` from Git Bash just terminates the process.
 - The final Docker image has no shell. CLI in a container: `docker exec -i pabrika /pabrika ...`, or `docker run --entrypoint /pabrika`.
 - Go's `flag` stops at the first positional argument: `reset-password --password-stdin EMAIL`, not `EMAIL --password-stdin`.
 - On Windows use Git Bash; paths like `/data` may need `MSYS_NO_PATHCONV=1` for Docker commands.
