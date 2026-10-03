@@ -103,6 +103,14 @@ watch(
   },
 )
 
+/** Escape reverts an edited title first; with nothing to revert it falls through and closes the panel. */
+function onTitleEscape(e: KeyboardEvent): void {
+  const current = detail.ticket.value?.title ?? view.value?.title ?? ''
+  if (titleDraft.value === current) return
+  e.preventDefault()
+  reloadTitle()
+}
+
 function reloadTitle(): void {
   titleDraft.value = detail.ticket.value?.title ?? view.value?.title ?? ''
   titleRemote.value = false
@@ -255,7 +263,7 @@ const PRIORITY_LABEL: Record<string, string> = { low: 'Low', medium: 'Medium', h
                 :aria-invalid="titleError ? true : undefined"
                 @blur="saveTitle"
                 @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
-                @keydown.esc.prevent="reloadTitle"
+                @keydown.esc="onTitleEscape"
               />
               <p v-if="titleError" role="alert" class="text-xs text-destructive">{{ titleError }}</p>
               <Alert v-if="titleRemote">

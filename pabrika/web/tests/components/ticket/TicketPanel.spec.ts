@@ -132,6 +132,23 @@ describe('TicketPanel', () => {
     expect(body().textContent).toContain('Changed by someone else')
   })
 
+  it('Escape in the title input reverts an edited title first, then closes the panel', async () => {
+    const { router } = await open('/p/WEB/t/1')
+    const input = body().querySelector<HTMLInputElement>('#ticket-title')!
+    const original = input.value
+    input.value = 'half typed'
+    input.dispatchEvent(new Event('input'))
+    await flushPromises()
+    const esc = () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    esc()
+    await flushPromises()
+    expect(input.value).toBe(original)
+    expect(router.currentRoute.value.name).toBe('ticket') // first Escape only reverted
+    esc()
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('board') // nothing to revert: closes
+  })
+
   it('follows the server copy when there is no unsaved draft', async () => {
     const { board } = await open('/p/WEB/t/1')
     board.fullById = { ...board.fullById, t1: full(ticket(1, { status: 'todo', title: 'Server rename' }), 'Hello **world**') }
