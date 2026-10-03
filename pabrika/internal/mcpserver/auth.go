@@ -46,8 +46,40 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r = r.WithContext(auth.WithPrincipal(r.Context(), p))
-	h.sdk.ServeHTTP(w, r)
+	h.sdk.ServeHTTP(&noStoreWriter{ResponseWriter: w}, r)
 }
+
+// noStoreWriter keeps Cache-Control: no-store (the SDK sets "no-cache, no-transform").
+type noStoreWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (w *noStoreWriter) force() {
+	if !w.wrote {
+		w.wrote = true
+		w.Header().Set("Cache-Control", "no-store")
+	}
+}
+
+func (w *noStoreWriter) WriteHeader(code int) {
+	w.force()
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *noStoreWriter) Write(b []byte) (int, error) {
+	w.force()
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *noStoreWriter) Flush() {
+	w.force()
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *noStoreWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // originAllowed: an absent Origin is allowed (non-browser clients); a present one must equal
 // BASE_URL's origin. "null" never matches.

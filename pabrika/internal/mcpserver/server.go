@@ -133,7 +133,8 @@ func (h *handler) newServer(p auth.Principal) *mcp.Server {
 	if p.Token != nil && p.Token.Scope != service.ScopeWrite {
 		instr += " This token is read-only; write tools are not available."
 	}
-	s := mcp.NewServer(&mcp.Implementation{Name: "pabrika", Version: "1"}, &mcp.ServerOptions{Instructions: instr})
+	s := mcp.NewServer(&mcp.Implementation{Name: "pabrika", Version: "1"}, &mcp.ServerOptions{Instructions: instr,
+		GetSessionID: func() string { return "" }}) // stateless: never issue Mcp-Session-Id
 	for _, def := range toolsFor(p) {
 		def := def
 		s.AddTool(def.mcpTool(), func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

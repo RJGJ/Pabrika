@@ -21,12 +21,12 @@ const testBase = "https://pabrika.test"
 // fx is the seeded fixture: alice owner, bob editor, carol viewer, dave non-member; projects
 // WEB (alice owner, bob editor, carol viewer) and OPS (alice owner).
 type fx struct {
-	t                      *testing.T
-	env                    *testutil.Env
-	h                      *handler
+	t                       *testing.T
+	env                     *testutil.Env
+	h                       *handler
 	alice, bob, carol, dave testutil.User
-	web, ops               testutil.Project
-	logBuf                 *strings.Builder
+	web, ops                testutil.Project
+	logBuf                  *strings.Builder
 }
 
 func newFx(t *testing.T) *fx {
@@ -184,3 +184,16 @@ func toolNames(t *testing.T, cs *mcp.ClientSession) []string {
 }
 
 var _ = io.Discard
+
+type mcpCall = mcp.CallToolParams
+
+func mustErr(err error) error {
+	if err == nil {
+		panic("expected an error")
+	}
+	return err
+}
+
+func textOf(r *mcp.CallToolResult) string {
+	return r.Content[0].(*mcp.TextContent).Text
+}
