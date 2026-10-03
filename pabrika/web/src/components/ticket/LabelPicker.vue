@@ -91,7 +91,9 @@ async function create(): Promise<void> {
               <CheckIcon :class="modelValue.includes(l.id) ? 'opacity-100' : 'opacity-0'" />
               {{ l.name }}
             </CommandItem>
-            <CommandItem v-if="showCreate" value="__create__" :disabled="creating" @select="create">
+            <!-- Keyed by the typed name: Command captures an item's text once, on mount, for filtering, so the
+                 item must remount per keystroke or it is filtered out by its stale text. -->
+            <CommandItem v-if="showCreate" :key="`create:${trimmed}`" value="__create__" :disabled="creating" @select="create">
               <PlusIcon /> Create label "{{ trimmed }}"
             </CommandItem>
           </CommandGroup>
