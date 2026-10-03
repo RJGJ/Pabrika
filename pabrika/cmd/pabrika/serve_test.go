@@ -266,6 +266,17 @@ func TestServeEndToEnd(t *testing.T) {
 		t.Fatalf("%d %v", resp.StatusCode, resp.Header)
 	}
 
+	// The SPA fallback is wired: a UI path answers with the bundle (200) or, in a checkout
+	// without a build, the 503 "UI not built" page; never the plain mux 404.
+	resp, err = http.Get("http://127.0.0.1:" + port + "/p/WEB/t/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 && resp.StatusCode != 503 {
+		t.Fatalf("SPA path status = %d", resp.StatusCode)
+	}
+
 	cancel()
 	select {
 	case c := <-code:
@@ -274,6 +285,9 @@ func TestServeEndToEnd(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("serve did not exit")
+	}
+	if !strings.Contains(logs.String(), "pabrika starting") || !strings.Contains(logs.String(), "version=") {
+		t.Fatalf("startup log line missing: %s", logs.String())
 	}
 	if _, err := net.DialTimeout("tcp", "127.0.0.1:"+port, 200*time.Millisecond); err == nil {
 		t.Fatal("still listening")

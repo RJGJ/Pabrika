@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +20,7 @@ import (
 	"github.com/RJGJ/Pabrika/internal/httpapi"
 	"github.com/RJGJ/Pabrika/internal/service"
 	"github.com/RJGJ/Pabrika/internal/store"
+	"github.com/RJGJ/Pabrika/web"
 )
 
 // defaultShutdownTimeout is 8 s (not 10) so `docker stop`, whose grace period is 10 s, sees a
@@ -162,7 +166,13 @@ func serve(ctx context.Context, e env, shutdownTimeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	log.Info("database ready", "path", cfg.DBPath, "schema_version", v, "version", version)
+	log.Info("database ready", "path", cfg.DBPath, "schema_version", v)
+	log.Info("pabrika starting", "version", version, "listen", ":"+strconv.Itoa(cfg.Port), "base_url", cfg.BaseURL,
+		"allow_signup", cfg.AllowSignup, "trust_proxy", cfg.TrustProxy, "cookie_secure", cfg.CookieSecure,
+		"db_path", cfg.DBPath)
+	for _, w := range configWarnings(cfg) {
+		log.Warn(w)
+	}
 
 	hub := service.NewHub(service.HubOptions{Logger: log})
 	svc := service.New(st, service.Deps{Publisher: hub, Streams: hub})
@@ -171,6 +181,8 @@ func serve(ctx context.Context, e env, shutdownTimeout time.Duration) error {
 		Config: cfg, Store: st, Services: svc, Logger: log, Sessions: sessions,
 		Hasher: auth.NewHasher(e.hashParams, auth.DefaultConcurrency), Hub: hub,
 	})
+
+	attachUI(api, log)
 
 	handedOff = true // runServer closes the store from here on
 	return runServer(ctx, serveParams{
@@ -184,6 +196,41 @@ func serve(ctx context.Context, e env, shutdownTimeout time.Duration) error {
 		Close:           st,
 		ShutdownTimeout: shutdownTimeout,
 	})
+}
+
+// attachUI serves the embedded web bundle as the fallback handler. A binary built without the
+// bundle (only web/dist/.gitkeep) still starts: the API works and the UI paths answer 503.
+func attachUI(api *httpapi.Server, log *slog.Logger) {
+	fsys, err := web.FS()
+	if err != nil {
+		log.Warn("web UI unavailable", "err", err)
+		return
+	}
+	if _, err := fs.Stat(fsys, "index.html"); err != nil {
+		log.Warn("web UI bundle missing from this binary (index.html not embedded): the UI will answer 503; run `make build`")
+	}
+	api.SetFallback(httpapi.NewSPAHandler(fsys))
+}
+
+// configWarnings lists misconfigurations worth a startup warning. None is fatal.
+func configWarnings(cfg config.Config) []string {
+	var out []string
+	u, err := url.Parse(cfg.BaseURL)
+	if err != nil {
+		return out
+	}
+	host := strings.ToLower(u.Hostname())
+	local := host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasSuffix(host, ".localhost")
+	switch {
+	case u.Scheme == "http" && cfg.CookieSecure && !local:
+		out = append(out, "BASE_URL is http:// on a non-localhost host while COOKIE_SECURE=true: browsers will not keep the session cookie, so login will appear to fail; use an https:// BASE_URL behind a TLS proxy")
+	case u.Scheme == "https" && !cfg.CookieSecure:
+		out = append(out, "BASE_URL is https:// but COOKIE_SECURE=false: the session cookie is also sent over plain HTTP; set COOKIE_SECURE=true")
+	}
+	if cfg.TrustProxy {
+		out = append(out, "TRUST_PROXY=true: the first X-Forwarded-For hop is trusted for rate limiting and logs; make sure the reverse proxy overwrites that header and the app port is not reachable directly")
+	}
+	return out
 }
 
 // joinDone returns a channel closed when every input channel is closed.
