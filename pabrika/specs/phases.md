@@ -17,12 +17,12 @@ If a phase spec conflicts with main-spec.md, main-spec.md wins; flag the conflic
 
 | # | Phase | Depends on | Status |
 |---|---|---|---|
-| 1 | Foundation | none | todo |
-| 2 | Auth, sharing and REST | 1 | todo |
-| 3 | Live updates | 2 | todo |
-| 4 | MCP server | 2 (3 recommended) | todo |
-| 5 | Web UI | 2, 3 | todo |
-| 6 | Ship | 1 to 5 | todo |
+| 1 | Foundation | none | done |
+| 2 | Auth, sharing and REST | 1 | done |
+| 3 | Live updates | 2 | done |
+| 4 | MCP server | 2 (3 recommended) | done (manual Claude Code check not run) |
+| 5 | Web UI | 2, 3 | done (full real-server browser checklist partial) |
+| 6 | Ship | 1 to 5 | done except Docker steps (not run); see `pabrika/docs/FINDINGS.md` |
 
 Phase 4 can start once phase 2 is done, so agents can use the board before the UI is polished. Wire phase 3 events into MCP writes as soon as both exist.
 
