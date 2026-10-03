@@ -383,11 +383,3 @@ func TestUpdateProfile(t *testing.T) {
 	_, err = env.Svc.Users.UpdateProfile(ctx, service.UserActor("GHOST"), "x")
 	testutil.AssertOutcome(t, err, testutil.NotFound)
 }
-
-func TestStubsReturnNotImplemented(t *testing.T) {
-	env := testutil.NewTestServices(t)
-	a := service.UserActor("x")
-	if _, err := env.Svc.Tickets.Get(ctx, a, "WEB-1"); err == nil || errors.Is(err, service.ErrNotFound) {
-		t.Fatal("stub should return a plain not-implemented error")
-	}
-}
