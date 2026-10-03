@@ -1,0 +1,11 @@
+{
+  "id": "01JABCDEF0000000000000P001",
+  "key": "WEB",
+  "name": "Website",
+  "description": "The public website",
+  "archived_at": null,
+  "created_at": "2026-09-02T08:00:00Z",
+  "updated_at": "2026-09-02T08:00:00Z",
+  "role": "owner",
+  "counts": { "backlog": 1, "todo": 1, "in_progress": 0, "done": 0 }
+}

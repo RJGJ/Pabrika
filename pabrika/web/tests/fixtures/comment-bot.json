@@ -1,0 +1,8 @@
+{
+  "id": "01JABCDEF0000000000000C001",
+  "ticket_id": "01JABCDEF0000000000000T001",
+  "author": { "type": "api_token", "id": "01JABCDEF0000000000000K001", "name": "claude-agent", "bot": true, "owner_name": "Ada Lovelace" },
+  "body": "Investigating.",
+  "created_at": "2026-10-02T12:00:00Z",
+  "edited_at": null
+}

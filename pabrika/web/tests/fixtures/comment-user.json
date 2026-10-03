@@ -1,0 +1,8 @@
+{
+  "id": "01JABCDEF0000000000000C002",
+  "ticket_id": "01JABCDEF0000000000000T001",
+  "author": { "type": "user", "id": "01JABCDEF0000000000000U001", "name": "Ada Lovelace", "bot": false },
+  "body": "Looks good.",
+  "created_at": "2026-10-02T12:05:00Z",
+  "edited_at": "2026-10-02T12:10:00Z"
+}
