@@ -9,6 +9,30 @@ import (
 )
 
 type Querier interface {
+	// Activity queries. Every name carries the Activity prefix.
+	ActivityInsert(ctx context.Context, arg ActivityInsertParams) error
+	// Newest first by (created_at, id); keyset in expanded OR form. Names via LEFT JOINs.
+	ActivityList(ctx context.Context, arg ActivityListParams) ([]ActivityListRow, error)
+	// Test only: raw activity rows of a ticket (including soft-deleted tickets), oldest first.
+	ActivitySeedListRaw(ctx context.Context, ticketID string) ([]TicketActivity, error)
+	// A live comment with resolved author names (LEFT JOINs: missing rows give NULL names).
+	CommentGetView(ctx context.Context, id string) (CommentGetViewRow, error)
+	// Comment queries. Every name carries the Comment prefix.
+	CommentInsert(ctx context.Context, arg CommentInsertParams) error
+	// Oldest first by (created_at, id), excluding deleted; keyset in expanded OR form.
+	CommentListAsc(ctx context.Context, arg CommentListAscParams) ([]CommentListAscRow, error)
+	// Newest first (the caller flips to oldest first); used by Latest(n).
+	CommentListNewest(ctx context.Context, arg CommentListNewestParams) ([]CommentListNewestRow, error)
+	// Test only: remove a token row so author names fall back to "deleted token".
+	CommentSeedDeleteToken(ctx context.Context, id string) error
+	// Test only: remove a user row so author names fall back to "deleted user".
+	CommentSeedDeleteUser(ctx context.Context, id string) error
+	// Test only: a comment row including soft-deleted ones.
+	CommentSeedGetRaw(ctx context.Context, id string) (Comment, error)
+	// Test only: change a member's role directly (e.g. demote a comment author).
+	CommentSeedSetRole(ctx context.Context, arg CommentSeedSetRoleParams) error
+	CommentSoftDelete(ctx context.Context, arg CommentSoftDeleteParams) error
+	CommentUpdateBody(ctx context.Context, arg CommentUpdateBodyParams) error
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -62,6 +86,38 @@ type Querier interface {
 	SeedMember(ctx context.Context, arg SeedMemberParams) error
 	// Direct inserts used by internal/testutil to seed data without going through services.
 	SeedProject(ctx context.Context, arg SeedProjectParams) (Project, error)
+	TicketAddLabel(ctx context.Context, arg TicketAddLabelParams) error
+	// Ticket queries. Every name carries the Ticket prefix (names are global across all .sql files).
+	// Atomic per-project counter; runs inside the create transaction.
+	TicketAllocateNumber(ctx context.Context, id string) (int64, error)
+	TicketClearLabels(ctx context.Context, ticketID string) error
+	// Batched comment counts (non-deleted comments only).
+	TicketCommentCounts(ctx context.Context, ticketIds []string) ([]TicketCommentCountsRow, error)
+	// A live (not soft-deleted) ticket by id.
+	TicketGet(ctx context.Context, id string) (Ticket, error)
+	TicketInsert(ctx context.Context, arg TicketInsertParams) error
+	TicketIsMember(ctx context.Context, arg TicketIsMemberParams) (int64, error)
+	// Batched label hydration (name order via the NOCASE column collation, then id).
+	TicketLabelsForTickets(ctx context.Context, ticketIds []string) ([]TicketLabelsForTicketsRow, error)
+	// Labels of one project among the given ids, in name order (validates ownership and gives names).
+	TicketLabelsInProject(ctx context.Context, arg TicketLabelsInProjectParams) ([]Label, error)
+	// Live tickets of one column in (position, id) order, excluding one ticket id ('' excludes none).
+	TicketListColumn(ctx context.Context, arg TicketListColumnParams) ([]TicketListColumnRow, error)
+	// Board order: status rank, position, id. Keyset predicate in expanded OR form (no row values).
+	// description is intentionally not selected. query_text is a literal substring (instr, so no
+	// LIKE wildcards to escape; lower() is ASCII-only, as the spec accepts).
+	TicketListPage(ctx context.Context, arg TicketListPageParams) ([]TicketListPageRow, error)
+	// Test only: a ticket row including soft-deleted ones.
+	TicketSeedGetRaw(ctx context.Context, id string) (Ticket, error)
+	// Test seeding only: a label without going through the Labels service.
+	TicketSeedLabel(ctx context.Context, arg TicketSeedLabelParams) (Label, error)
+	// Renumbering: position only, no updated_at bump.
+	TicketSetPosition(ctx context.Context, arg TicketSetPositionParams) error
+	TicketSoftDelete(ctx context.Context, arg TicketSoftDeleteParams) (int64, error)
+	TicketUpdateFields(ctx context.Context, arg TicketUpdateFieldsParams) error
+	TicketUpdateMove(ctx context.Context, arg TicketUpdateMoveParams) error
+	// Batched assignee hydration.
+	TicketUsersByIDs(ctx context.Context, userIds []string) ([]TicketUsersByIDsRow, error)
 	UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error)
 }
