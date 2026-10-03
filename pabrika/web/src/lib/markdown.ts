@@ -41,7 +41,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
 })
 
-/** Render markdown to sanitized HTML. The only consumer of the result is MarkdownView (v-html). */
+/** Render markdown to sanitized HTML. The only consumer of the result is MarkdownView (the single raw-HTML sink). */
 export function renderMarkdown(src: string): string {
   if (!src) return ''
   const raw = md.render(src)
