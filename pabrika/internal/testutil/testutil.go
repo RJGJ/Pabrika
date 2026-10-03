@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RJGJ/Pabrika/internal/auth"
 	"github.com/RJGJ/Pabrika/internal/service"
 	"github.com/RJGJ/Pabrika/internal/store"
 	"github.com/RJGJ/Pabrika/internal/store/db"
@@ -255,6 +256,43 @@ func (e *Env) NewToken(t testing.TB, ownerUserID string, scope service.Scope, pr
 		t.Fatal(err)
 	}
 	return id
+}
+
+// NewTokenWithSecret inserts an api_tokens row whose hash and prefix come from auth.Generate
+// (so the returned plain secret authenticates as a bearer token) and returns the token id and
+// the secret. Use external test packages (auth_test, httpapi_test): testutil imports auth.
+func (e *Env) NewTokenWithSecret(t testing.TB, ownerUserID string, scope service.Scope, projectID string) (id, secret string) {
+	t.Helper()
+	if scope == "" {
+		scope = service.ScopeWrite
+	}
+	secret, hash, prefix := auth.Generate()
+	id = e.NewID()
+	var pid *string
+	if projectID != "" {
+		pid = &projectID
+	}
+	err := e.Store.WithTx(context.Background(), func(q *db.Queries) error {
+		_, err := q.CreateAPIToken(context.Background(), db.CreateAPITokenParams{
+			ID: id, UserID: ownerUserID, Name: "token " + id[len(id)-6:], TokenHash: hash,
+			TokenPrefix: prefix, Scope: string(scope), ProjectID: pid, CreatedAt: e.now(),
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id, secret
+}
+
+// NewSession creates a real session for userID (clocked by the Env) and returns the cookie value.
+func (e *Env) NewSession(t testing.TB, userID string) string {
+	t.Helper()
+	value, _, err := auth.NewSessions(e.Store, auth.SessionOptions{Now: e.Clock.Now}).Create(context.Background(), userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return value
 }
 
 // NewProject inserts a project and the owner's owner membership directly through the store.

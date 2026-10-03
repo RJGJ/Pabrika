@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pressly/goose/v3 v3.24.3
+	golang.org/x/crypto v0.38.0
 	modernc.org/sqlite v1.38.2
 )
 

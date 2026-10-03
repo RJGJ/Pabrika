@@ -191,6 +191,21 @@ type Activity struct {
 type UserService interface {
 	// UpdateProfile changes the display name. Session-only (a token actor gets `session_required`).
 	UpdateProfile(ctx context.Context, actor Actor, displayName string) (User, error)
+
+	// Create registers an account (signup and the CLI). The email is trimmed and lowercased;
+	// all field errors come back in one 422; a duplicate email is KindConflict `email_taken`
+	// (also when the UNIQUE constraint fires under a race). passwordHash comes from internal/auth.
+	Create(ctx context.Context, email, displayName, passwordHash string) (User, error)
+	// ValidateNew checks email and display name only (no DB), so signup can report every 422
+	// field before it spends time hashing. Nil when valid.
+	ValidateNew(email, displayName string) *Error
+	// Credentials is the login lookup; ErrNotFound when the email is unknown.
+	Credentials(ctx context.Context, email string) (userID, passwordHash string, err error)
+	// PasswordHash returns the stored hash of a user; ErrNotFound when unknown.
+	PasswordHash(ctx context.Context, userID string) (string, error)
+	// SetPassword stores newHash and deletes the user's sessions except keepSessionHash
+	// (a sessions.token_hash) in one transaction. keepSessionHash "" deletes them all.
+	SetPassword(ctx context.Context, userID, newHash, keepSessionHash string) error
 }
 
 type User struct {
