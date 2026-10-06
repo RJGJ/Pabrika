@@ -1,0 +1,13 @@
+# Runs pabrika-backup.service once a day. See the install notes in pabrika-backup.service.
+
+[Unit]
+Description=Daily Pabrika database backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+# If the machine was off at 03:15, run the backup when it next starts.
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

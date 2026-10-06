@@ -1,0 +1,24 @@
+# systemd service that runs one Pabrika backup. Triggered by pabrika-backup.timer.
+#
+# System-wide install (Docker, or rootful Podman), as root:
+#   sudo cp deploy/pabrika-backup.service deploy/pabrika-backup.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pabrika-backup.timer
+#
+# Rootless Podman: copy both files to ~/.config/systemd/user/, change Environment=ENGINE to
+# podman, use `systemctl --user ...` instead, and run `loginctl enable-linger "$USER"`.
+#
+# ExecStart assumes the repository is cloned to /opt/pabrika (so the module root is /opt/pabrika/pabrika);
+# edit it if you cloned elsewhere.
+# Run a backup now: sudo systemctl start pabrika-backup.service
+# Logs:             journalctl -u pabrika-backup.service
+
+[Unit]
+Description=Back up the Pabrika database
+
+[Service]
+Type=oneshot
+Environment=ENGINE=docker
+Environment=BACKUP_DIR=/var/backups/pabrika
+Environment=KEEP_DAYS=14
+ExecStart=/opt/pabrika/pabrika/deploy/backup.sh

@@ -1,0 +1,42 @@
+# Podman Quadlet unit: runs Pabrika under systemd, and starts it again after a reboot.
+# Needs Podman 4.4 or newer (Ubuntu 24.04 has 4.9; Debian 12 ships 4.3, which is too old:
+# see docs/deploy-vps.md for the fallback).
+#
+# Rootless install (recommended), as your normal user:
+#   mkdir -p ~/.config/containers/systemd
+#   cp deploy/pabrika.container ~/.config/containers/systemd/
+#   cp deploy/pabrika.env.example ~/.config/pabrika.env && chmod 600 ~/.config/pabrika.env
+#   $EDITOR ~/.config/pabrika.env                  # set BASE_URL
+#   podman build -t pabrika .                      # build the image first (from the module root)
+#   systemctl --user daemon-reload
+#   systemctl --user start pabrika                 # Quadlet generates pabrika.service
+#   loginctl enable-linger "$USER"                 # keep it running after you log out / reboot
+#
+# Logs: journalctl --user -u pabrika -f
+# Upgrade: rebuild the image, then: systemctl --user restart pabrika
+# (Quadlet units are generated, so there is no "enable"; [Install] below makes it start at boot.)
+
+[Unit]
+Description=Pabrika kanban board
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName=pabrika
+Image=localhost/pabrika:latest
+# Loopback only: the reverse proxy on this host is the public entry point.
+PublishPort=127.0.0.1:8080:8080
+# Named volume with all state (the SQLite database). Created automatically.
+Volume=pabrika-data:/data
+# systemd expands %h to your home directory.
+EnvironmentFile=%h/.config/pabrika.env
+# Password hashing uses 64 MiB per hash; keep at least 512 MB.
+PodmanArgs=--memory=512m
+
+[Service]
+Restart=always
+# The app shuts down gracefully within 8 s of SIGTERM.
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target
