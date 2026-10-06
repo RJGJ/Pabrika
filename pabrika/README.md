@@ -143,6 +143,17 @@ Safety:
 - `GET /mcp` returning 405 is expected (stateless mode).
 - REST scripting: `curl` with `Authorization: Bearer` works against `/api/v1` without an `Origin` header. Requests that carry a cookie, and unauthenticated unsafe requests such as login, get 403 `origin_mismatch` without a matching `Origin` header, by design.
 
+## Deploy on a VPS
+
+A step-by-step guide from a blank Ubuntu or Debian server to `https://your-domain` is in [docs/deploy-vps.md](docs/deploy-vps.md): Docker or Podman for the app, Caddy or nginx for TLS, signup lockdown, backups and upgrades. Ready-to-copy files (env template, container run script, Podman Quadlet unit, Caddyfile, nginx configs, backup script and systemd timer) are in [`deploy/`](deploy/). In short:
+
+```bash
+git clone https://github.com/RJGJ/Pabrika.git /opt/pabrika && cd /opt/pabrika/pabrika
+sudo install -m 640 deploy/pabrika.env.example /etc/pabrika.env    # set BASE_URL=https://your-domain
+sudo ENGINE=docker ./deploy/run-container.sh                       # or ENGINE=podman; builds and starts on 127.0.0.1:8080
+# then put Caddy (deploy/Caddyfile) or nginx (deploy/nginx-pabrika.conf) in front for HTTPS
+```
+
 ## Running behind a proxy (TLS)
 
 Pabrika speaks plain HTTP. Put a TLS-terminating proxy in front, because the session cookie and bearer tokens must not travel over plain HTTP. Full notes and checks: [docs/proxy.md](docs/proxy.md).

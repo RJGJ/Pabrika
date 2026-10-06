@@ -11,6 +11,8 @@ Backups contain argon2id password hashes and API token hashes. Treat them as sen
 
 ## Online backup
 
+On a VPS, [`deploy/backup.sh`](../deploy/backup.sh) with the systemd timer next to it automates this for Docker or Podman (see [deploy-vps.md](deploy-vps.md#10-backups)). The commands below are what it runs.
+
 The Pabrika image has no shell and no `sqlite3`, so run the backup from a throwaway container that mounts the same volume while Pabrika is running (the sqlite3 CLI and the app share the WAL index through the volume; this works for local Docker volumes, not network filesystems). This helper-container form is the one to use on Docker Desktop for Windows and Mac:
 
 ```bash

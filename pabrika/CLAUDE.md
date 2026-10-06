@@ -20,7 +20,8 @@ internal/
   testutil/        test services, seed helpers
 migrations/        embedded goose SQL
 web/               Vue app (Bun, Vite); web/embed.go embeds web/dist
-docs/              proxy, backup, security audit, smoke test
+docs/              VPS deployment guide, proxy, backup, security audit, smoke test, findings
+deploy/            VPS files: env template, container run script, Podman Quadlet unit, Caddyfile, nginx configs, backup script and timer
 scripts/           audit.sh (the runnable part of the security audit, `make audit`)
 specs/ plans/      specs and implementation plans (see below)
 ```

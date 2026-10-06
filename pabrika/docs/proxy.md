@@ -1,6 +1,6 @@
 # Running behind a reverse proxy
 
-Pabrika speaks plain HTTP on port 8080 and has no built-in TLS. Put a TLS-terminating proxy in front of it, because the session cookie and bearer tokens must not travel over plain HTTP. Caddy and nginx examples follow.
+Pabrika speaks plain HTTP on port 8080 and has no built-in TLS. Put a TLS-terminating proxy in front of it, because the session cookie and bearer tokens must not travel over plain HTTP. Caddy and nginx examples follow. For a complete server setup using these configs see [deploy-vps.md](deploy-vps.md); ready-to-copy versions are in [`deploy/`](../deploy/).
 
 ## Rules
 
