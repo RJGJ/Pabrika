@@ -7,7 +7,7 @@
     "dev": "vite",
     "mock": "bun scripts/mock-server.ts",
     "prebuild": "bun scripts/clean-dist.ts",
-    "build": "vue-tsc --noEmit && vite build && bun scripts/clean-dist.ts --ensure && bun run check:dist",
+    "build": "vue-tsc --noEmit -p tsconfig.build.json && vite build && bun scripts/clean-dist.ts --ensure && bun run check:dist",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "check:dist": "bun scripts/check-dist.ts"
