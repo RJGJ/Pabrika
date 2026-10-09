@@ -112,6 +112,8 @@ Signed-in users can change their display name and password in account settings. 
    {"mcpServers":{"pabrika":{"type":"http","url":"http://localhost:8080/mcp","headers":{"Authorization":"Bearer pb_your_token_here"}}}}
    ```
 
+Ready-made agent playbooks (standup, triage, planner, worker) are in [agents/](agents/).
+
 Tools (14). Read tokens see only the first five; write tokens see all:
 
 | Tool | Purpose |
@@ -302,6 +304,22 @@ specs/            main spec and per-phase specs
 - Descriptions are last-write-wins; there is no collaborative editing.
 - SQLite needs a local filesystem. Plan for 512 MB of RAM.
 - Four fixed columns; no organizations above projects.
+
+## Roadmap
+
+A direction, not a commitment. Items are in suggested order; open gaps from the first build (untested Docker steps, partial browser checks) are tracked in [docs/FINDINGS.md](docs/FINDINGS.md).
+
+**Next**
+
+1. **Custom states per project.** Add your own states, such as "For Approval", next to Backlog, To do, In progress and Done. This is the largest change: it replaces the fixed status list (a v1 decision in `specs/phases.md`), so it needs a spec revision first, and it touches the database schema and board ordering, the MCP tools, the board columns and live events.
+2. **Full-text search** over tickets and comments (SQLite FTS5), in the web app and as an MCP tool.
+3. **Audit log view.** A project activity feed in the UI and API showing who, or which token, did what, with filtering by token. The activity data already exists; agents have no way to read it today.
+4. **Agent identities and assignment.** Assign tickets to a named agent token, and atomic `claim_ticket` / `release_ticket` MCP tools so several agents don't take the same work, plus a badge in the UI. This removes the "one worker per project" limit in [agents/worker.md](agents/worker.md).
+5. **Webhooks.** Signed, retried outbound webhooks for ticket and comment events, so Slack, Discord, n8n or an agent runner can react without polling.
+
+**Later**
+
+- **Email (optional SMTP)** for invitations, password reset and notifications, replacing the CLI-only workarounds.
 
 ## Troubleshooting
 
