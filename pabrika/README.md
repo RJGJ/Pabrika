@@ -112,6 +112,8 @@ Signed-in users can change their display name and password in account settings. 
    {"mcpServers":{"pabrika":{"type":"http","url":"http://localhost:8080/mcp","headers":{"Authorization":"Bearer pb_your_token_here"}}}}
    ```
 
+Ready-made agent playbooks (standup, triage, planner, worker) are in [agents/](agents/).
+
 Tools (14). Read tokens see only the first five; write tokens see all:
 
 | Tool | Purpose |
