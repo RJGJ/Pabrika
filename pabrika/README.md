@@ -1,6 +1,6 @@
 # Pabrika
 
-Pabrika is a small, self-hosted kanban board. Tickets live in projects that several people can share, and AI agents can create, read, update and delete tickets through a built-in MCP server. One Go binary serves the web app, the REST API and the MCP endpoint, and all data lives in one SQLite file.
+This is the kanban board component of [Pabrika](../README.md), an agentic way of building software. It is a small, self-hosted kanban board. Tickets live in projects that several people can share, and AI agents can create, read, update and delete tickets through a built-in MCP server. One Go binary serves the web app, the REST API and the MCP endpoint, and all data lives in one SQLite file.
 
 <!-- Screenshot placeholder (optional): docs/screenshot.png -->
 
@@ -111,6 +111,8 @@ Signed-in users can change their display name and password in account settings. 
    ```json
    {"mcpServers":{"pabrika":{"type":"http","url":"http://localhost:8080/mcp","headers":{"Authorization":"Bearer pb_your_token_here"}}}}
    ```
+
+Ready-made agent playbooks (standup, triage, planner, worker) are in [agents/](../agents/).
 
 Tools (14). Read tokens see only the first five; write tokens see all:
 
