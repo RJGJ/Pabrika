@@ -68,6 +68,7 @@ export function useBoardFilters() {
     setPriority: (priority: Priority[]) => update({ priority }),
     setAssignee: (assignee: string | null) => update({ assignee }),
     setLabels: (label: string[]) => update({ label }),
+    setAttention: (attention: boolean) => update({ attention }),
     clear,
   }
 }

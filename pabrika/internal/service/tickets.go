@@ -40,16 +40,18 @@ type ticketRow struct {
 	Position             float64
 	DueDate              *string
 	CreatedAt, UpdatedAt string
+	PRURL, Branch        *string
+	RoundN, RoundMax     *int64
 }
 
 func rowFromTicket(t db.Ticket) ticketRow {
 	return ticketRow{t.ID, t.ProjectID, t.Number, t.Title, t.Description, t.Status, t.Priority,
-		t.AssigneeID, t.Position, t.DueDate, t.CreatedAt, t.UpdatedAt}
+		t.AssigneeID, t.Position, t.DueDate, t.CreatedAt, t.UpdatedAt, t.PrUrl, t.Branch, t.RoundN, t.RoundMax}
 }
 
 func rowFromListRow(r db.TicketListPageRow) ticketRow {
 	return ticketRow{r.ID, r.ProjectID, r.Number, r.Title, "", r.Status, r.Priority,
-		r.AssigneeID, r.Position, r.DueDate, r.CreatedAt, r.UpdatedAt}
+		r.AssigneeID, r.Position, r.DueDate, r.CreatedAt, r.UpdatedAt, r.PrUrl, r.Branch, r.RoundN, r.RoundMax}
 }
 
 // hydrateTickets loads labels, assignees and comment counts for any slice of tickets in at most
@@ -106,6 +108,10 @@ func (s *Services) hydrateTickets(ctx context.Context, q *db.Queries, projectKey
 		if t.Labels == nil {
 			t.Labels = []Label{}
 		}
+		t.PRURL, t.Branch = r.PRURL, r.Branch
+		if r.RoundN != nil && r.RoundMax != nil {
+			t.Round = &Round{N: int(*r.RoundN), Max: int(*r.RoundMax)}
+		}
 		if r.AssigneeID != nil {
 			if u, ok := users[*r.AssigneeID]; ok {
 				u := u
@@ -127,7 +133,20 @@ func (s *Services) loadTicket(ctx context.Context, q *db.Queries, projectKey, id
 	if err != nil {
 		return Ticket{}, err
 	}
-	return ts[0], nil
+	t := ts[0]
+	t.Decisions, err = latestDecisions(ctx, q, id)
+	if err != nil {
+		return Ticket{}, err
+	}
+	t.DecisionsLoaded = true
+	return t, nil
+}
+
+// setDerivedLinks re-derives the cached PR url and branch from a description (same transaction
+// as the write). A removed line clears the value.
+func setDerivedLinks(ctx context.Context, q *db.Queries, ticketID, description string) error {
+	pr, br := ParseDescriptionLinks(description)
+	return q.TicketSetLinks(ctx, db.TicketSetLinksParams{PrUrl: pr, Branch: br, ID: ticketID})
 }
 
 // ---- activity writer ----
@@ -135,6 +154,7 @@ func (s *Services) loadTicket(ctx context.Context, q *db.Queries, projectKey, id
 var ticketActivityKeys = map[string]bool{
 	"title": true, "description": true, "priority": true, "due_date": true,
 	"assignee": true, "labels": true, "status": true, "position": true,
+	"gate": true, "gate_name": true, "note": true,
 }
 
 // recordTicketActivity writes one ticket_activity row inside the caller's transaction. It refuses
@@ -339,6 +359,9 @@ func (t *ticketService) Create(ctx context.Context, actor Actor, projectRef stri
 		if len(labels) > 0 {
 			changes["labels"] = [2]any{nil, tktLabelNames(labels)}
 		}
+		if err := setDerivedLinks(ctx, tx.Q, id, in.Description); err != nil {
+			return err
+		}
 		if err := recordTicketActivity(ctx, tx, actor, id, "created", changes); err != nil {
 			return err
 		}
@@ -414,10 +437,17 @@ func (t *ticketService) List(ctx context.Context, actor Actor, projectRef string
 				p.AssigneeID = &v
 			}
 		}
-		if f.LabelID != "" {
-			v := strings.ToUpper(f.LabelID)
-			p.LabelID = &v
+		labelIDs := tktNormalizeIDs(append(append([]string{}, f.LabelIDs...), f.LabelID))
+		if len(labelIDs) > MaxLabelFilter {
+			return fieldError("label", fmt.Sprintf("at most %d labels per filter", MaxLabelFilter))
 		}
+		slots := []**string{&p.LabelID1, &p.LabelID2, &p.LabelID3, &p.LabelID4, &p.LabelID5,
+			&p.LabelID6, &p.LabelID7, &p.LabelID8, &p.LabelID9, &p.LabelID10}
+		for i, id := range labelIDs {
+			id := id
+			*slots[i] = &id
+		}
+		p.LabelCount = int64(len(labelIDs))
 		if qs := strings.TrimSpace(f.Query); qs != "" {
 			p.QueryText = &qs
 		}
@@ -561,6 +591,11 @@ func (t *ticketService) Update(ctx context.Context, actor Actor, ref string, in 
 		}); err != nil {
 			return err
 		}
+		if _, ok := changes["description"]; ok {
+			if err := setDerivedLinks(ctx, tx.Q, cur.ID, desc); err != nil {
+				return err
+			}
+		}
 		if labelsChanged {
 			if err := tx.Q.TicketClearLabels(ctx, cur.ID); err != nil {
 				return err
@@ -584,6 +619,97 @@ func (t *ticketService) Update(ctx context.Context, actor Actor, ref string, in 
 		}
 		tx.Emit(Event{Type: EventTicketUpdated, ProjectID: proj.ID, TicketID: cur.ID})
 		out, err = t.s.loadTicket(ctx, tx.Q, proj.Key, cur.ID)
+		return err
+	})
+	return out, err
+}
+
+// ---- ChangeLabels ----
+
+// ChangeLabels adds and removes labels in one write transaction. Adding a label the ticket has and
+// removing one it lacks are no-ops; when nothing changes there is no activity, event or updated_at bump.
+func (t *ticketService) ChangeLabels(ctx context.Context, actor Actor, ref string, in ChangeLabelsInput) (Ticket, error) {
+	var out Ticket
+	err := t.s.write(ctx, actor, func(tx *Tx) error {
+		loc, proj, _, err := t.s.resolveTicket(ctx, tx.Q, actor, ref, RoleEditor, true)
+		if err != nil {
+			return err
+		}
+		if err := requireWritable(proj); err != nil {
+			return err
+		}
+		if err := in.Validate(); err != nil {
+			return err
+		}
+		add, remove := tktNormalizeIDs(in.Add), tktNormalizeIDs(in.Remove)
+		f := fieldErrs{}
+		if len(add) > 0 {
+			rows, err := tx.Q.TicketLabelsInProject(ctx, db.TicketLabelsInProjectParams{ProjectID: proj.ID, LabelIds: add})
+			if err != nil {
+				return err
+			}
+			if len(rows) != len(add) {
+				f.add("add", "every label must belong to this project")
+			}
+		}
+		oldRows, err := tx.Q.TicketLabelsForTickets(ctx, []string{loc.ID})
+		if err != nil {
+			return err
+		}
+		have := map[string]bool{}
+		oldNames := make([]string, len(oldRows))
+		for i, r := range oldRows {
+			have[r.ID] = true
+			oldNames[i] = r.Name
+		}
+		var toAdd, toRemove []string
+		for _, id := range add {
+			if !have[id] {
+				toAdd = append(toAdd, id)
+			}
+		}
+		for _, id := range remove {
+			if have[id] {
+				toRemove = append(toRemove, id)
+			}
+		}
+		if len(oldRows)+len(toAdd)-len(toRemove) > MaxLabelsPerTicket {
+			f.add("add", fmt.Sprintf("at most %d labels per ticket", MaxLabelsPerTicket))
+		}
+		if err := f.err(); err != nil {
+			return err
+		}
+		if len(toAdd) == 0 && len(toRemove) == 0 {
+			out, err = t.s.loadTicket(ctx, tx.Q, proj.Key, loc.ID)
+			return err
+		}
+		if len(toRemove) > 0 {
+			if err := tx.Q.TicketRemoveLabels(ctx, db.TicketRemoveLabelsParams{TicketID: loc.ID, LabelIds: toRemove}); err != nil {
+				return err
+			}
+		}
+		for _, id := range toAdd {
+			if err := tx.Q.TicketAddLabelIfAbsent(ctx, db.TicketAddLabelIfAbsentParams{TicketID: loc.ID, LabelID: id}); err != nil {
+				return err
+			}
+		}
+		if err := tx.Q.TicketTouch(ctx, db.TicketTouchParams{UpdatedAt: tx.NowText(), ID: loc.ID}); err != nil {
+			return err
+		}
+		newRows, err := tx.Q.TicketLabelsForTickets(ctx, []string{loc.ID})
+		if err != nil {
+			return err
+		}
+		newNames := make([]string, len(newRows))
+		for i, r := range newRows {
+			newNames[i] = r.Name
+		}
+		changes := map[string][2]any{"labels": {oldNames, newNames}}
+		if err := recordTicketActivity(ctx, tx, actor, loc.ID, "labeled", changes); err != nil {
+			return err
+		}
+		tx.Emit(Event{Type: EventTicketUpdated, ProjectID: proj.ID, TicketID: loc.ID})
+		out, err = t.s.loadTicket(ctx, tx.Q, proj.Key, loc.ID)
 		return err
 	})
 	return out, err
@@ -649,6 +775,10 @@ func (t *ticketService) Move(ctx context.Context, actor Actor, ref string, in Mo
 		cur, err := tx.Q.TicketGet(ctx, loc.ID)
 		if err != nil {
 			return mapNoRows(err)
+		}
+		if in.ExpectedStatus != nil && Status(cur.Status) != *in.ExpectedStatus {
+			return NewError(KindConflict, CodeStatusConflict,
+				fmt.Sprintf("Ticket is in %s, not %s", cur.Status, string(*in.ExpectedStatus)))
 		}
 		col, err := tx.Q.TicketListColumn(ctx, db.TicketListColumnParams{ProjectID: proj.ID, Status: string(in.Status), ExcludeID: cur.ID})
 		if err != nil {

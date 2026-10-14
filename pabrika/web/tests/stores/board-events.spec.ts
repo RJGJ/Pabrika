@@ -213,6 +213,25 @@ describe('applyEvent: other events', () => {
     expect(b.commentVersions.t1).toBe(2)
   })
 
+  it('decision.recorded from someone else refetches the ticket once, stores the full copy and flashes', async () => {
+    const b = await loaded()
+    const wf = { pr_url: null, branch: null, round: null, decisions: [{ gate: 'plan', verdict: 'approved', note: null, at: 'x', by: { id: 'u2', name: 'Bob' }, current: true }] }
+    T.get.mockResolvedValue(full(ticket(1, { workflow: wf as never })))
+    await b.applyEvent(event('decision.recorded', { ticket_id: 't1', decision_id: 'd1' }))
+    expect(T.get).toHaveBeenCalledTimes(1)
+    expect(T.listAll).not.toHaveBeenCalled()
+    expect(b.fullById.t1.workflow?.decisions?.[0].verdict).toBe('approved')
+    expect(b.flashIds.has('t1')).toBe(true)
+  })
+
+  it('decision.recorded by me refetches without a flash', async () => {
+    const b = await loaded()
+    T.get.mockResolvedValue(full(ticket(1)))
+    await b.applyEvent(event('decision.recorded', { ticket_id: 't1', actor: { type: 'user', id: ME.id } }))
+    expect(T.get).toHaveBeenCalledTimes(1)
+    expect(b.flashIds.has('t1')).toBe(false)
+  })
+
   it('label.changed refetches labels and the ticket list (not the project)', async () => {
     const b = await loaded()
     await b.applyEvent(event('label.changed', { label_id: 'l1' }))

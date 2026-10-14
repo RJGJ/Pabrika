@@ -11,3 +11,7 @@ data/
 pabrika/web/dist/*
 !pabrika/web/dist/.gitkeep
 pabrika/web/scripts/.mock-data/
+e2e/.tmp/
+pabrika/e2e/.tmp/
+pabrika/e2e/test-results/
+pabrika/e2e/playwright-report/

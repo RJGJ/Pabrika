@@ -56,6 +56,7 @@ async function mountAt(path: string) {
       ...routes.filter((r) => r.name === 'board' || r.name === 'ticket'),
       { path: '/', name: 'home', component: { template: '<i>home</i>' } },
       { path: '/p/:key/settings', name: 'project-settings', component: { template: '<i/>' } },
+      { path: '/p/:key/activity', name: 'project-activity', component: { template: '<i/>' } },
     ],
   })
   setRouter(router)
@@ -167,5 +168,39 @@ describe('BoardView', () => {
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/')
     expect(board.lostAccess).toBe(false)
+  })
+
+
+  it('the toolbar links to the activity feed', async () => {
+    await mountAt('/p/WEB')
+    const a = [...document.querySelectorAll('a')].find((x) => x.textContent?.trim() === 'Activity')
+    expect(a?.getAttribute('href')).toBe('/p/WEB/activity')
+  })
+
+  it('"Needs my attention" filters to gate and blocked tickets and is stored in the URL', async () => {
+    const lab = (name: string) => ({ id: `l-${name}`, project_id: 'p1', name, color: 'gray' })
+    T.listAll.mockResolvedValue([
+      ticket(1, { title: 'Gate me', labels: [lab('awaiting-plan-approval')] }),
+      ticket(2, { title: 'Plain one' }),
+      ticket(3, { title: 'Stuck', labels: [lab('blocked')] }),
+    ])
+    const { router } = await mountAt('/p/WEB')
+    expect(document.body.textContent).toContain('Plain one')
+    const btn = document.querySelector('[data-testid=attention-filter]') as HTMLButtonElement
+    expect(btn.getAttribute('aria-pressed')).toBe('false')
+    btn.click()
+    await flushPromises()
+    expect(router.currentRoute.value.query.attention).toBe('1')
+    expect(document.body.textContent).toContain('Gate me')
+    expect(document.body.textContent).toContain('Stuck')
+    expect(document.body.textContent).not.toContain('Plain one')
+    expect(document.body.textContent).toContain('Clear filters to drag tickets')
+  })
+
+  it('restores "Needs my attention" after a reload', async () => {
+    T.listAll.mockResolvedValue([ticket(1, { title: 'Plain one' })])
+    await mountAt('/p/WEB?attention=1')
+    expect(document.body.textContent).not.toContain('Plain one')
+    expect((document.querySelector('[data-testid=attention-filter]') as HTMLElement).getAttribute('aria-pressed')).toBe('true')
   })
 })

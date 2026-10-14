@@ -1,0 +1,20 @@
+{
+  "action": "commented",
+  "actor": {
+    "bot": true,
+    "id": "01JTESTTESTTESTTESTTESTTES",
+    "name": "token F39HNX",
+    "owner_name": "Alice",
+    "type": "api_token"
+  },
+  "changes": {},
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "id": "01JTESTTESTTESTTESTTESTTES",
+  "kind": "comment",
+  "summary": "[orchestrator] ROUND 2/3",
+  "ticket": {
+    "id": "01JTESTTESTTESTTESTTESTTES",
+    "ref": "WEB-3",
+    "title": "Gated"
+  }
+}

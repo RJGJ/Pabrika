@@ -11,6 +11,7 @@ import type {
 import { STATUSES } from '@/api/types'
 import { emptyFilters, filtersActive as hasFilters, matchesFilters, type BoardFilters } from '@/lib/filters'
 import { computePlacement, type Placement } from '@/lib/placement'
+import { classifyLabels } from '@/lib/workflow'
 import { notify } from '@/lib/toast'
 import { getRouter } from '@/router/instance'
 import { useAuthStore } from './auth'
@@ -130,6 +131,12 @@ export const useBoardStore = defineStore('board', () => {
     for (const s of STATUSES) out[s] = filteredColumns.value[s].filter((id) => !isTempId(id)).length
     return out
   })
+
+  /** Tickets waiting on a person at an `awaiting-*` gate (the sidebar count). */
+  const gateCount = computed(
+    () =>
+      Object.values(ticketsById.value).filter((t) => !isTempId(t.id) && classifyLabels(t.labels).stage?.startsWith('awaiting-')).length,
+  )
 
   function ticketByNumber(n: number): TicketSummary | undefined {
     return Object.values(ticketsById.value).find((t) => t.number === n && !isTempId(t.id))
@@ -664,7 +671,7 @@ export const useBoardStore = defineStore('board', () => {
   function shouldDefer(e: ApiEvent): boolean {
     if (!busy()) return false
     const id = e.ticket_id
-    if (!id || !(e.type.startsWith('ticket.') || e.type.startsWith('comment.'))) return false
+    if (!id || !(e.type.startsWith('ticket.') || e.type.startsWith('comment.') || e.type === 'decision.recorded')) return false
     if (pendingMoves.value.has(id) || e.type === 'ticket.created') return true
     const t = ticketsById.value[id]
     if (!t) return false
@@ -716,6 +723,16 @@ export const useBoardStore = defineStore('board', () => {
         if (!ticketsLoaded.value) return
         await refreshTicket(id)
         if (!mine && ticketsById.value[id]) flash(id)
+        return
+      }
+      case 'decision.recorded': {
+        // Same coalescing as ticket.updated: one refetch of the ticket (its workflow.decisions come with it).
+        // The open panel also refreshes its activity when the refreshed full ticket arrives.
+        if (!id) return
+        if (ticketsLoaded.value) {
+          await refreshTicket(id)
+          if (!mine && ticketsById.value[id]) flash(id)
+        }
         return
       }
       case 'label.changed':
@@ -772,7 +789,7 @@ export const useBoardStore = defineStore('board', () => {
   return {
     project, members, labels, ticketsById, columns, columnKeys, loadState, error, flashIds, pendingMoves, dragging,
     deferredEvents, leaving, selectedRef, lostAccess, live, ticketsLoaded, filters, fullById, commentVersions,
-    role, isArchived, isOwner, isViewer, canEdit, counts, filtersActive, filteredColumns, filteredCounts,
+    role, isArchived, isOwner, isViewer, canEdit, counts, filtersActive, filteredColumns, filteredCounts, gateCount,
     ticketByNumber, setFilters,
     load, reload, refetchProject, handleLostAccess, acknowledgeLostAccess,
     createTicket, updateTicket, deleteTicket, moveTicket, startDrag, endDrag,

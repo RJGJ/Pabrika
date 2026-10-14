@@ -23,14 +23,15 @@ type Deps struct {
 
 // Services is the entry point to every business operation. Transports (REST, MCP) hold one.
 type Services struct {
-	Projects ProjectService
-	Members  MemberService
-	Labels   LabelService
-	Tickets  TicketService
-	Comments CommentService
-	Activity ActivityService
-	Users    UserService
-	Tokens   TokenService
+	Projects  ProjectService
+	Members   MemberService
+	Labels    LabelService
+	Tickets   TicketService
+	Comments  CommentService
+	Activity  ActivityService
+	Decisions DecisionService
+	Users     UserService
+	Tokens    TokenService
 
 	st   *store.Store
 	deps Deps
@@ -57,6 +58,7 @@ func New(st *store.Store, deps Deps) *Services {
 	s.Tickets = &ticketService{s: s}
 	s.Comments = &commentService{s: s}
 	s.Activity = &activityService{s: s}
+	s.Decisions = &decisionService{s: s}
 	s.Users = &userService{s: s}
 	s.Tokens = &tokenService{s: s}
 	return s

@@ -24,10 +24,10 @@ func tsp(t *time.Time) *string {
 	return &s
 }
 
-// effectiveRole caps a member role to viewer for a read-scope token. The service already
-// returns the effective role; capping again is idempotent and keeps the view layer safe.
+// effectiveRole caps a member role to viewer for a read or comment scope token. The service
+// already returns the effective role; capping again is idempotent and keeps the view layer safe.
 func effectiveRole(p auth.Principal, role service.Role) service.Role {
-	if p.Method == auth.MethodToken && p.Token != nil && p.Token.Scope == service.ScopeRead && role != "" {
+	if p.Method == auth.MethodToken && p.Token != nil && p.Token.Scope != service.ScopeWrite && role != "" {
 		return service.RoleViewer
 	}
 	return role
@@ -219,8 +219,65 @@ type ticketView struct {
 	Position     float64       `json:"position"`
 	DueDate      *string       `json:"due_date"`
 	CommentCount int           `json:"comment_count"`
+	Workflow     *workflowView `json:"workflow"` // null when nothing is derived or decided
 	CreatedAt    string        `json:"created_at"`
 	UpdatedAt    string        `json:"updated_at"`
+}
+
+// workflowView is the derived workflow object. Decisions is omitted on list items and present
+// (possibly empty) on single-ticket responses.
+type workflowView struct {
+	PRURL     *string                 `json:"pr_url"`
+	Branch    *string                 `json:"branch"`
+	Round     *roundView              `json:"round"`
+	Decisions *[]workflowDecisionView `json:"decisions,omitempty"`
+}
+
+type roundView struct {
+	N   int `json:"n"`
+	Max int `json:"max"`
+}
+
+type decisionByView struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type workflowDecisionView struct {
+	Gate    string         `json:"gate"`
+	Verdict string         `json:"verdict"`
+	Note    *string        `json:"note"`
+	At      string         `json:"at"`
+	By      decisionByView `json:"by"`
+	Current bool           `json:"current"`
+}
+
+func mapWorkflow(t service.Ticket) *workflowView {
+	if !t.HasWorkflow() {
+		return nil
+	}
+	v := &workflowView{PRURL: t.PRURL, Branch: t.Branch}
+	if t.Round != nil {
+		v.Round = &roundView{N: t.Round.N, Max: t.Round.Max}
+	}
+	if t.DecisionsLoaded {
+		ds := make([]workflowDecisionView, 0, len(t.Decisions))
+		for _, d := range t.Decisions {
+			ds = append(ds, workflowDecisionView{
+				Gate: string(d.Gate), Verdict: string(d.Verdict), Note: d.Note, At: ts(d.At),
+				By: decisionByView{ID: d.By.ID, Name: actorNameOrUnknown(d.By.Name)}, Current: d.Current,
+			})
+		}
+		v.Decisions = &ds
+	}
+	return v
+}
+
+func actorNameOrUnknown(n string) string {
+	if n == "" || n == svcDeletedUser {
+		return "Unknown"
+	}
+	return n
 }
 
 func mapTicket(t service.Ticket, full bool) ticketView {
@@ -228,7 +285,7 @@ func mapTicket(t service.Ticket, full bool) ticketView {
 		ID: t.ID, Ref: t.Ref, ProjectID: t.ProjectID, ProjectKey: t.ProjectKey, Number: t.Number,
 		Title: t.Title, Status: string(t.Status), Priority: string(t.Priority),
 		Labels: mapLabels(t.Labels), Position: t.Position, DueDate: t.DueDate,
-		CommentCount: t.CommentCount, CreatedAt: ts(t.CreatedAt), UpdatedAt: ts(t.UpdatedAt),
+		CommentCount: t.CommentCount, Workflow: mapWorkflow(t), CreatedAt: ts(t.CreatedAt), UpdatedAt: ts(t.UpdatedAt),
 	}
 	if t.Assignee != nil {
 		v.Assignee = &assigneeView{ID: t.Assignee.ID, DisplayName: t.Assignee.DisplayName, Email: t.Assignee.Email}
@@ -393,4 +450,72 @@ func mapTokens(items []service.Token) []tokenView {
 
 func mapCreatedToken(t service.Token, secret string) createdTokenView {
 	return createdTokenView{Token: mapToken(t), Secret: secret}
+}
+
+// ---- decisions and the project feed ----
+
+// decisionView is the `decision` shape.
+type decisionView struct {
+	ID        string         `json:"id"`
+	TicketID  string         `json:"ticket_id"`
+	Gate      string         `json:"gate"`
+	Verdict   string         `json:"verdict"`
+	Note      *string        `json:"note"`
+	Actor     decisionByView `json:"actor"`
+	ActorRole string         `json:"actor_role"`
+	GateLabel string         `json:"gate_label"`
+	CreatedAt string         `json:"created_at"`
+}
+
+func mapDecision(d service.Decision) decisionView {
+	return decisionView{
+		ID: d.ID, TicketID: d.TicketID, Gate: string(d.Gate), Verdict: string(d.Verdict), Note: d.Note,
+		Actor: decisionByView{ID: d.Actor.ID, Name: actorNameOrUnknown(d.Actor.Name)}, ActorRole: string(d.ActorRole),
+		GateLabel: d.GateLabel, CreatedAt: ts(d.CreatedAt),
+	}
+}
+
+func mapDecisions(ds []service.Decision) []decisionView {
+	out := make([]decisionView, 0, len(ds))
+	for _, d := range ds {
+		out = append(out, mapDecision(d))
+	}
+	return out
+}
+
+func serviceDecisionInput(b decisionBody) service.RecordDecisionInput {
+	return service.RecordDecisionInput{Gate: service.Gate(b.Gate), Verdict: service.Verdict(b.Verdict), Note: b.Note}
+}
+
+type feedTicketView struct {
+	ID    string `json:"id"`
+	Ref   string `json:"ref"`
+	Title string `json:"title"`
+}
+
+// feedItemView is the `activity_feed_item` shape. Summary is set for comments only.
+type feedItemView struct {
+	ID        string            `json:"id"`
+	Kind      string            `json:"kind"`
+	Ticket    feedTicketView    `json:"ticket"`
+	Actor     commentAuthorView `json:"actor"`
+	Action    string            `json:"action"`
+	Changes   map[string][2]any `json:"changes"`
+	Summary   string            `json:"summary,omitempty"`
+	CreatedAt string            `json:"created_at"`
+}
+
+func mapFeed(items []service.FeedItem) []feedItemView {
+	out := make([]feedItemView, 0, len(items))
+	for _, it := range items {
+		ch := it.Changes
+		if ch == nil {
+			ch = map[string][2]any{}
+		}
+		out = append(out, feedItemView{
+			ID: it.ID, Kind: it.Kind, Ticket: feedTicketView{ID: it.TicketID, Ref: it.TicketRef, Title: it.Title},
+			Actor: mapAuthor(it.Actor), Action: it.Action, Changes: ch, Summary: it.Summary, CreatedAt: ts(it.CreatedAt),
+		})
+	}
+	return out
 }

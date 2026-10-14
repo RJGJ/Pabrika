@@ -11,9 +11,9 @@ Status note: the Go, web and CLI commands below were each run once on Windows (G
 ```text
 cmd/pabrika/       subcommands: serve, user create, user reset-password, healthcheck, version
 internal/
-  config/          env parsing (PORT, DB_PATH, BASE_URL, ALLOW_SIGNUP, COOKIE_SECURE, TRUST_PROXY)
+  config/          env parsing (HOST, PORT, DB_PATH, BASE_URL, ALLOW_SIGNUP, COOKIE_SECURE, TRUST_PROXY)
   store/           SQLite (modernc.org/sqlite), sqlc output in store/db, queries in store/queries
-  service/         business rules; Actor, authz, validation, ordering, events seam
+  service/         business rules; Actor, authz, validation, ordering, events seam; workflow.go (PR/branch/round parsers, gate labels), decisions.go, activity_feed.go (project feed)
   auth/            argon2id, sessions, API tokens, middleware
   httpapi/         REST handlers, SSE stream, error mapping, SPA handler
   mcpserver/       MCP tools and resources, thin wrappers over service
@@ -77,7 +77,8 @@ go run ./cmd/pabrika version
 - REST and MCP share input structs, enums, caps and `Validate()` from `service`. Key, email and label-name resolution for MCP lives in `mcpserver`.
 - Ticket references look like `WEB-12`; project paths accept the key or the ULID. Ticket JSON uses `ref` and `project_key`.
 - Events are published by the service after DB commit, never from handlers or MCP tools.
-- Token scope and project limit are enforced in the service layer through `Actor`.
+- Token scope and project limit are enforced in the service layer through `Actor`. Scopes are `read`, `comment` (reads plus `Comments.Add` and editing own comments) and `write`; unknown values fail closed to read. REST write routes refuse a `comment` token unless registered with `routeComment` (`Route.CommentOK`). `move` takes an optional `expected_status` and answers `status_conflict` (409) on a mismatch.
+- Gate decisions (`ticket_decisions`, migration 00003) are insert-only, session-only (`requireSession`, plus the `SessionOnly` route), owner/editor-only and record-only: no MCP write tool exists for them and the server never edits labels or columns. Gate label names are constants in `service/workflow.go`. `tickets.pr_url`, `branch`, `round_n`, `round_max` are a derived cache: written in the same transaction as the description edit (`PR:`/`Branch:` lines) or as a bot (`api_token`) comment add/edit/delete (`[orchestrator] ROUND n/N`); never trust them as input. Every decision/comment/feed reader must join `tickets` and filter `deleted_at IS NULL`.
 - Limits: comment body 20,000 characters, ticket description 20,000, title 200, project name 100, description 2,000, label name 50, display name 1 to 100.
 - Commit messages: small, focused commits.
 
@@ -94,6 +95,29 @@ go run ./cmd/pabrika version
 - The final Docker image has no shell. CLI in a container: `docker exec -i pabrika /pabrika ...`, or `docker run --entrypoint /pabrika`.
 - Go's `flag` stops at the first positional argument: `reset-password --password-stdin EMAIL`, not `EMAIL --password-stdin`.
 - On Windows use Git Bash; paths like `/data` may need `MSYS_NO_PATHCONV=1` for Docker commands.
+
+## Agent workflow
+
+Command lines for the agent roles (same text as root `AGENTS.md`). Run from the worktree root; paths are repo-root relative.
+
+```text
+Build web: cd pabrika/web && bun install --frozen-lockfile && bun run build
+Build Go: cd pabrika && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=dev" -o pabrika ./cmd/pabrika
+Test Go: cd pabrika && CGO_ENABLED=0 go test ./...
+Lint Go: cd pabrika && go vet ./...
+Test web: cd pabrika/web && bun run test
+Typecheck web: cd pabrika/web && bun run typecheck
+Gates (all must pass before READY): Build web, Test Go, Lint Go, Test web, Typecheck web
+E2E: cd pabrika/web && bun install --frozen-lockfile && bun run build && cd ../e2e && bun install --frozen-lockfile && bun x playwright test
+Branch: pabrika/<TICKET-REF>-<slug>   Worktree: ../wt-<TICKET-REF>   Base: see board project description
+Secrets: never read .env or deploy/ env files; never put tokens in tickets, comments, files or PRs
+```
+
+- Slug: lower-case ASCII and hyphens, max 40 characters. Example branch: `pabrika/PAB-12-csv-export`.
+- Create a worktree: `git worktree add ../wt-PAB-12 -b pabrika/PAB-12-csv-export origin/<Base>`. Remove it after merge or close: `git worktree remove ../wt-PAB-12` (never `--force`; if it refuses, post `BLOCKED:`).
+- Only the Orchestrator creates and removes worktrees.
+- Never push to `Base:` or to a branch the agent did not create; never force-push.
+- Each worktree needs its own dependency install (`cd pabrika/web && bun install --frozen-lockfile`).
 
 ## Specs and plans
 

@@ -46,9 +46,9 @@
 // # Order of checks (authz.go)
 //
 // session-only (requireSession) -> unknown/non-member 404 -> token limited to another project 404
-// -> read scope on a write 403 insufficient_scope -> role too low 403 forbidden -> archived 409
+// -> read scope on a write 403 insufficient_scope (a comment scope passes only for Comments.Add and Comments.Edit) -> role too low 403 forbidden -> archived 409
 // project_archived (requireWritable / requireProjectWrite) -> input Validate() 422.
-// requireProject returns the project and the EFFECTIVE role (capped at viewer for read tokens).
+// requireProject returns the project and the EFFECTIVE role (capped at viewer for read and comment tokens).
 // Resolve tickets, labels and comments to their project with resolveTicket, resolveLabel and
 // resolveComment (each then calls requireProject); soft-deleted tickets and comments are not found.
 //

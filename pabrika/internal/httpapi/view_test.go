@@ -167,7 +167,7 @@ func TestShapeMemberAndLabel(t *testing.T) {
 }
 
 var ticketKeys = []string{"id", "ref", "project_id", "project_key", "number", "title", "status", "priority", "assignee",
-	"labels", "position", "due_date", "comment_count", "created_at", "updated_at"}
+	"labels", "position", "due_date", "comment_count", "workflow", "created_at", "updated_at"}
 
 func sampleTicket() service.Ticket {
 	due := "2026-05-06"

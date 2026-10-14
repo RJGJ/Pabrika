@@ -6,7 +6,7 @@ export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export type Priority = (typeof PRIORITIES)[number]
 export const ROLES = ['owner', 'editor', 'viewer'] as const
 export type Role = (typeof ROLES)[number]
-export const SCOPES = ['read', 'write'] as const
+export const SCOPES = ['read', 'comment', 'write'] as const
 export type Scope = (typeof SCOPES)[number]
 export const LABEL_COLORS = [
   'gray', 'red', 'orange', 'amber', 'green', 'teal', 'blue', 'indigo', 'purple', 'pink',
@@ -73,6 +73,66 @@ export interface Assignee {
   email: string
 }
 
+export const GATES = ['requirements', 'plan'] as const
+export type Gate = (typeof GATES)[number]
+export const VERDICTS = ['approved', 'changes_requested'] as const
+export type Verdict = (typeof VERDICTS)[number]
+
+export interface Round {
+  n: number
+  max: number
+}
+
+/** Latest decision per gate, ticket detail only (workflow.decisions). */
+export interface WorkflowDecision {
+  gate: Gate
+  verdict: Verdict
+  note: string | null
+  at: string
+  by: { id: string; name: string }
+  current?: boolean
+}
+
+/** Derived by the server from description lines and bot comments; null when everything is empty. */
+export interface Workflow {
+  pr_url: string | null
+  branch: string | null
+  round: Round | null
+  decisions?: WorkflowDecision[]
+}
+
+export interface Decision {
+  id: string
+  ticket_id: string
+  gate: Gate
+  verdict: Verdict
+  note: string | null
+  actor: { id: string; name: string }
+  actor_role: string
+  gate_label: string
+  created_at: string
+}
+
+export interface CreateDecisionInput {
+  gate: Gate
+  verdict: Verdict
+  note?: string
+}
+
+export type FeedKind = 'activity' | 'comment' | 'decision'
+
+export interface ActivityFeedItem {
+  id: string
+  kind: FeedKind
+  ticket: { id: string; ref: string; title: string }
+  actor: CommentAuthor
+  action?: string
+  changes?: Record<string, unknown>
+  /** Comment body, cut to 200 characters by the server. */
+  summary?: string
+  created_at: string
+}
+
 export interface TicketSummary {
   id: string
   ref: string
@@ -87,6 +147,8 @@ export interface TicketSummary {
   position: number
   due_date: string | null
   comment_count: number
+  /** Absent on servers older than agentic phase 4. */
+  workflow?: Workflow | null
   created_at: string
   updated_at: string
 }
@@ -167,6 +229,7 @@ export const EVENT_TYPES = [
   'label.changed',
   'member.changed',
   'project.updated',
+  'decision.recorded',
 ] as const
 export type EventType = (typeof EVENT_TYPES)[number]
 
@@ -175,6 +238,7 @@ export interface ApiEvent {
   project_id: string
   ticket_id?: string
   comment_id?: string
+  decision_id?: string
   label_id?: string
   user_id?: string
   renumbered?: boolean

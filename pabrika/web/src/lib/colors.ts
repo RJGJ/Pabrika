@@ -38,3 +38,17 @@ export function labelSwatchClass(color: string): string {
 export function priorityClasses(priority: string): string {
   return PRIORITY[priority] ?? PRIORITY.low
 }
+
+const TONE: Record<string, string> = {
+  green: LABEL.green,
+  orange: LABEL.orange,
+  red: LABEL.red,
+  amber: LABEL.amber,
+  blue: LABEL.blue,
+  neutral: LABEL.gray,
+}
+
+/** Classes for a status chip: green, orange, red, amber, blue or neutral (always paired with text). */
+export function toneClasses(tone: string): string {
+  return TONE[tone] ?? TONE.neutral
+}

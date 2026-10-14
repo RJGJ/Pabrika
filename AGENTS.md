@@ -6,7 +6,7 @@ Every command below is verified in `pabrika/CLAUDE.md` (the real reference) and 
 - `pabrika/CLAUDE.md` — layout, exact commands, conventions, gotchas (read first)
 - `pabrika/README.md` — user docs, quick start, deploy, security, limits
 - `pabrika/specs/phases.md` overrides `main-spec.md`; specs > plans
-- `agents/` — MCP playbooks (standup, triage, planner, worker)
+- `agents/` — the five Pabrika workflow roles (orchestrator, researcher, developer, reviewer, qa); the four older playbooks (standup, triage, planner, worker) stay until the dry run in `plans/agentic-phase-5-dry-run-rollout.md` passes. Workflow: `specs/agentic-workflow.md`.
 
 ## Module boundary
 - `pabrika/` = Go module (`go.mod`), Vue (`web/`), migrations, deploy
@@ -58,3 +58,22 @@ CGO_ENABLED=0 go build ./...
 - `make generate` = `sqlc generate`
 - `go vet ./...` before test gate
 - Security audit checklist: `docs/security-audit.md`; findings: `docs/FINDINGS.md`
+
+## Agent workflow (Pabrika board)
+Run all commands from the worktree root unless stated.
+Build web: cd pabrika/web && bun install --frozen-lockfile && bun run build
+Build Go: cd pabrika && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=dev" -o pabrika ./cmd/pabrika
+Test Go: cd pabrika && CGO_ENABLED=0 go test ./...
+Lint Go: cd pabrika && go vet ./...
+Test web: cd pabrika/web && bun run test
+Typecheck web: cd pabrika/web && bun run typecheck
+Gates (all must pass before READY): Build web, Test Go, Lint Go, Test web, Typecheck web
+E2E: cd pabrika/web && bun install --frozen-lockfile && bun run build && cd ../e2e && bun install --frozen-lockfile && bun x playwright test
+Branch: pabrika/<TICKET-REF>-<slug>   Worktree: ../wt-<TICKET-REF>   Base: see board project description
+Secrets: never read .env or deploy/ env files; never put tokens in tickets, comments, files or PRs
+
+- Slug: lower-case ASCII and hyphens, max 40 characters. Example branch: `pabrika/PAB-12-csv-export`.
+- Create a worktree: `git worktree add ../wt-PAB-12 -b pabrika/PAB-12-csv-export origin/<Base>`. Remove it after merge or close: `git worktree remove ../wt-PAB-12` (never `--force`; if it refuses, post `BLOCKED:`).
+- Only the Orchestrator creates and removes worktrees. The Go module root in a worktree is `<worktree>/pabrika`.
+- Never push to `Base:` or to a branch the agent did not create; never force-push.
+- Each worktree needs its own dependency install (`cd pabrika/web && bun install --frozen-lockfile`); `node_modules/` is gitignored.

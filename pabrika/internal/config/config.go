@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 // Config is the parsed process configuration.
 type Config struct {
+	Host         string // HOST, default empty (all interfaces); an IP address or "localhost"
 	Port         int    // PORT, default 8080, 1..65535
 	DBPath       string // DB_PATH, default ./data/pabrika.db
 	BaseURL      string // BASE_URL, absolute http(s) URL without path, query or fragment; trailing slash trimmed
@@ -30,6 +32,12 @@ func Load(getenv func(string) string) (Config, error) {
 		TrustProxy:   false,
 	}
 
+	if v := strings.TrimSpace(getenv("HOST")); v != "" {
+		if v != "localhost" && net.ParseIP(v) == nil {
+			return Config{}, fmt.Errorf("HOST: %q is not an IP address or \"localhost\"", v)
+		}
+		c.Host = v
+	}
 	if v := getenv("PORT"); v != "" {
 		p, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil || p < 1 || p > 65535 {

@@ -275,7 +275,7 @@ func TestEndToEndThroughMux(t *testing.T) {
 	tokID, secret := h.token("bob", service.ScopeWrite, nil)
 	cs := h.sdkClient(secret)
 	names := toolNames(t, cs)
-	if len(names) != 14 {
+	if len(names) != 18 {
 		t.Fatal(names)
 	}
 	pl := h.okCall(cs, "list_projects", nil)
@@ -296,9 +296,9 @@ func TestEndToEndThroughMux(t *testing.T) {
 	if len(cm) != 1 || cm[0].ID != c["id"] || cm[0].Author.Type != service.ActorAPIToken {
 		t.Fatalf("%+v", cm)
 	}
-	// read token over HTTP sees 5 tools
+	// read token over HTTP sees 7 tools
 	_, rsecret := h.token("alice", service.ScopeRead, nil)
-	if n := toolNames(t, h.sdkClient(rsecret)); len(n) != 5 {
+	if n := toolNames(t, h.sdkClient(rsecret)); len(n) != 7 {
 		t.Fatal(n)
 	}
 	// limited token: the ProjectKey from the resolver reaches the message
@@ -366,6 +366,8 @@ func TestSchemasDrift(t *testing.T) {
 		"list_labels": {"project"}, "create_label": {"project", "name"}, "list_tickets": {"project"}, "get_ticket": {"ticket"},
 		"create_ticket": {"project", "title"}, "update_ticket": {"ticket"}, "move_ticket": {"ticket", "status"},
 		"add_comment": {"ticket", "body"}, "delete_ticket": {"ticket"}, "update_comment": {"comment", "body"},
+		"add_label": {"ticket", "labels"}, "remove_label": {"ticket", "labels"},
+		"list_decisions": {"ticket"}, "list_activity": {"project"},
 	}
 	if len(def) != len(required) {
 		t.Fatal("tool count")

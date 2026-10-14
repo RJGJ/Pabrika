@@ -69,7 +69,112 @@ type ticketSummary struct {
 	Assignee *string          `json:"assignee"`
 	Labels   []string         `json:"labels"`
 	DueDate  *string          `json:"due_date"`
+	Workflow *workflowView    `json:"workflow"` // derived PR link, branch and review round; null when none
 	URL      string           `json:"url"`
+}
+
+type roundView struct {
+	N   int `json:"n"`
+	Max int `json:"max"`
+}
+
+// workflowView is the derived workflow object on summaries (no decisions).
+type workflowView struct {
+	PRURL  *string    `json:"pr_url"`
+	Branch *string    `json:"branch"`
+	Round  *roundView `json:"round"`
+}
+
+type decisionByView struct {
+	ID    string       `json:"id"`
+	Name  string       `json:"name"`
+	Email string       `json:"email"`
+	Role  service.Role `json:"role"`
+}
+
+// workflowDecisionView is the latest decision of a gate in get_ticket. current is false once the
+// gate label was applied again after the decision.
+type workflowDecisionView struct {
+	Gate    service.Gate    `json:"gate"`
+	Verdict service.Verdict `json:"verdict"`
+	Note    *string         `json:"note"`
+	At      string          `json:"at"`
+	By      decisionByView  `json:"by"`
+	Current bool            `json:"current"`
+}
+
+// workflowDetailView is workflowView plus the latest decision per gate (get_ticket only).
+type workflowDetailView struct {
+	workflowView
+	Decisions []workflowDecisionView `json:"decisions"`
+}
+
+func workflowOf(t service.Ticket) *workflowView {
+	if t.PRURL == nil && t.Branch == nil && t.Round == nil {
+		return nil
+	}
+	w := &workflowView{PRURL: t.PRURL, Branch: t.Branch}
+	if t.Round != nil {
+		w.Round = &roundView{N: t.Round.N, Max: t.Round.Max}
+	}
+	return w
+}
+
+func workflowDetailOf(t service.Ticket) *workflowDetailView {
+	if !t.HasWorkflow() {
+		return nil
+	}
+	d := &workflowDetailView{Decisions: make([]workflowDecisionView, 0, len(t.Decisions))}
+	if w := workflowOf(t); w != nil {
+		d.workflowView = *w
+	}
+	for _, x := range t.Decisions {
+		d.Decisions = append(d.Decisions, workflowDecisionView{
+			Gate: x.Gate, Verdict: x.Verdict, Note: x.Note, At: ts(x.At), Current: x.Current,
+			By: decisionByView{ID: x.By.ID, Name: x.By.Name, Email: x.By.Email, Role: x.Role},
+		})
+	}
+	return d
+}
+
+// decisionView is one row of list_decisions.
+type decisionView struct {
+	ID        string          `json:"id"`
+	Gate      service.Gate    `json:"gate"`
+	Verdict   service.Verdict `json:"verdict"`
+	Note      *string         `json:"note"`
+	At        string          `json:"at"`
+	By        decisionByView  `json:"by"`
+	GateLabel string          `json:"gate_label"`
+}
+
+func decisionViewOf(d service.Decision) decisionView {
+	return decisionView{
+		ID: d.ID, Gate: d.Gate, Verdict: d.Verdict, Note: d.Note, At: ts(d.CreatedAt), GateLabel: d.GateLabel,
+		By: decisionByView{ID: d.Actor.ID, Name: d.Actor.Name, Email: d.Actor.Email, Role: d.ActorRole},
+	}
+}
+
+// feedItemView is one row of list_activity.
+type feedItemView struct {
+	ID      string            `json:"id"`
+	Kind    string            `json:"kind"`
+	Ticket  string            `json:"ticket"`
+	Title   string            `json:"title"`
+	Actor   string            `json:"actor"`
+	Bot     bool              `json:"bot"`
+	Action  string            `json:"action"`
+	Changes map[string][2]any `json:"changes,omitempty"`
+	Summary string            `json:"summary,omitempty"`
+	At      string            `json:"at"`
+}
+
+func feedItemViewOf(it service.FeedItem) feedItemView {
+	return feedItemView{
+		ID: it.ID, Kind: it.Kind, Ticket: it.TicketRef, Title: it.Title, Actor: it.Actor.Name,
+		Bot: it.Actor.Type == service.ActorAPIToken, Action: it.Action, Changes: it.Changes,
+		Summary: it.Summary, At: ts(it.CreatedAt),
+	}
 }
 
 func (h *handler) ticketSummary(t service.Ticket) ticketSummary {
@@ -83,7 +188,7 @@ func (h *handler) ticketSummary(t service.Ticket) ticketSummary {
 		labels[i] = l.Name
 	}
 	return ticketSummary{Ref: t.Ref, Title: t.Title, Status: t.Status, Priority: t.Priority, Position: t.Position,
-		Assignee: assignee, Labels: labels, DueDate: t.DueDate, URL: h.ticketURL(t.ProjectKey, t.Number)}
+		Assignee: assignee, Labels: labels, DueDate: t.DueDate, Workflow: workflowOf(t), URL: h.ticketURL(t.ProjectKey, t.Number)}
 }
 
 type moveView struct {
@@ -110,6 +215,8 @@ type ticketDetail struct {
 	CommentCount      int           `json:"comment_count"`
 	Comments          []commentView `json:"comments"`
 	CommentsTruncated bool          `json:"comments_truncated"`
+	// Workflow shadows the summary field: same object plus the latest decision per gate.
+	Workflow *workflowDetailView `json:"workflow"`
 }
 
 const (

@@ -26,6 +26,7 @@ const pending = ref(false)
 
 const scopeOptions = [
   { value: 'read', label: 'Read (view only)' },
+  { value: 'comment', label: 'Comment (read and comment)' },
   { value: 'write', label: 'Write (create and edit)' },
 ]
 const projectOptions = computed(() => [

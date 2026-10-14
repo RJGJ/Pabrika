@@ -1,0 +1,10 @@
+{
+  "id": "01JABCDEF0000000000000F001",
+  "kind": "comment",
+  "ticket": { "id": "01JABCDEF0000000000000T003", "ref": "WEB-30", "title": "CSV export" },
+  "actor": { "type": "api_token", "id": "01JABCDEF0000000000000K001", "name": "developer-bot", "bot": true, "owner_name": "Ana" },
+  "action": "commented",
+  "changes": {},
+  "summary": "[developer] PLAN\nAdd a streaming CSV endpoint.",
+  "created_at": "2026-10-04T09:10:00Z"
+}

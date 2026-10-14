@@ -48,7 +48,10 @@ type Route struct {
 	Pattern string // "POST /api/v1/tickets/{id}/move" (Go 1.22 mux syntax)
 	Access  Access
 	Write   bool // changes data: a read-scope token gets 403 insufficient_scope
-	Handler http.HandlerFunc
+	// CommentOK opens a Write route to comment-scope tokens (only POST /tickets/{id}/comments and
+	// PATCH /comments/{id}). Fail closed: every other write route refuses a comment token.
+	CommentOK bool
+	Handler   http.HandlerFunc
 }
 
 // Deps are the collaborators of a Server. Config, Store and Services are required; everything
@@ -178,6 +181,8 @@ func (s *Server) registerRoutes() {
 	s.registerLabelRoutes()
 	s.registerTicketRoutes()
 	s.registerCommentRoutes()
+	s.registerDecisionRoutes()
+	s.registerActivityRoutes()
 	s.registerEventRoutes()
 }
 
@@ -193,6 +198,11 @@ func (s *Server) handle(rt Route) {
 // route is shorthand for handle.
 func (s *Server) route(pattern string, access Access, write bool, h http.HandlerFunc) {
 	s.handle(Route{Pattern: pattern, Access: access, Write: write, Handler: h})
+}
+
+// routeComment registers a write route that a comment-scope token may also call.
+func (s *Server) routeComment(pattern string, access Access, h http.HandlerFunc) {
+	s.handle(Route{Pattern: pattern, Access: access, Write: true, CommentOK: true, Handler: h})
 }
 
 // Mount registers pattern in the route table under the full guard chain (phase 3 events).

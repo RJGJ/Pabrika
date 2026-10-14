@@ -7,7 +7,7 @@ This repository holds the pieces that make that work. Today there are two:
 | Folder | What it is |
 |---|---|
 | [`pabrika/`](pabrika/) | The kanban web app: a self-hosted board with an MCP server. It is the shared source of truth for work. Go backend, SQLite, Vue frontend, one Docker container. |
-| [`agents/`](agents/) | Ready-made agent playbooks that use the board over MCP: standup, triage, planner, worker. |
+| [`agents/`](agents/) | Agent roles that run a goal-to-merged-PR workflow on the board over MCP: Orchestrator, Researcher, Developer, Code Reviewer, QA Tester (plus four older playbooks, kept until the workflow's dry run passes). |
 
 ## How it fits together
 
@@ -23,7 +23,7 @@ People and agents both read and write tickets on the board. Agents connect throu
 
 1. **Run the board.** Follow the quick start in [pabrika/README.md](pabrika/README.md#quick-start-docker).
 2. **Connect an agent.** Create an API token in the app and add the MCP server: [Connect an agent over MCP](pabrika/README.md#connect-an-agent-over-mcp).
-3. **Install a playbook.** Copy one from [agents/](agents/README.md) into your Claude Code agents folder.
+3. **Install the roles.** Copy the `pabrika-*.md` files from [agents/](agents/README.md) into your Claude Code agents folder. How the workflow, its three human gates and its guardrails work: [specs/agentic-workflow.md](specs/agentic-workflow.md); build order: [specs/agentic-phases.md](specs/agentic-phases.md).
 
 ## Repository layout
 
@@ -45,5 +45,6 @@ Early. The board works when built and run without Docker; the Docker image, prox
 - [pabrika/README.md](pabrika/README.md): setup, configuration, MCP, proxy, backups, security notes.
 - [pabrika/CLAUDE.md](pabrika/CLAUDE.md): code layout, commands, conventions and gotchas.
 - [pabrika/specs/](pabrika/specs/): the main spec and per-phase specs.
-- [agents/README.md](agents/README.md): playbook install and token scopes.
+- [agents/README.md](agents/README.md): role install, per-role tokens and token scopes.
+- [specs/agentic-workflow.md](specs/agentic-workflow.md): the five-role workflow spec.
 - [pabrika/LICENSE](pabrika/LICENSE): MIT.

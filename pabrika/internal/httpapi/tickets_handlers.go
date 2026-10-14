@@ -17,6 +17,7 @@ func (s *Server) registerTicketRoutes() {
 	s.route("POST /api/v1/projects/{id}/tickets", Authed, true, s.createTicket)
 	s.route("GET /api/v1/tickets/{id}", Authed, false, s.getTicket)
 	s.route("PATCH /api/v1/tickets/{id}", Authed, true, s.updateTicket)
+	s.route("PATCH /api/v1/tickets/{id}/labels", Authed, true, s.changeTicketLabels)
 	s.route("DELETE /api/v1/tickets/{id}", Authed, true, s.deleteTicket)
 	s.route("POST /api/v1/tickets/{id}/move", Authed, true, s.moveTicket)
 	s.route("GET /api/v1/tickets/{id}/activity", Authed, false, s.ticketActivity)
@@ -43,7 +44,7 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request) {
 		return v
 	}
 	status, priority := once("status"), once("priority")
-	assignee, label, text := once("assignee"), once("label"), once("q")
+	assignee, text := once("assignee"), once("q")
 	once("cursor")
 	if _, dup := queryOnce(q, "limit"); dup {
 		fields["limit"] = "may be given only once"
@@ -51,7 +52,8 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request) {
 	if utf8.RuneCountInString(text) > maxQueryLen {
 		fields["q"] = "must be 200 characters or fewer"
 	}
-	f := service.TicketFilter{LabelID: label, Query: text, Limit: limit, Cursor: q.Get("cursor")}
+	// label may repeat (all must be present); every other parameter still rejects repeats.
+	f := service.TicketFilter{LabelIDs: q["label"], Query: text, Limit: limit, Cursor: q.Get("cursor")}
 	if status != "" {
 		v := service.Status(status)
 		if !v.Valid() {
@@ -116,6 +118,19 @@ func (s *Server) updateTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t, err := s.svc.Tickets.Update(r.Context(), principal(r).Actor(), r.PathValue("id"), in)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ticketFull(t))
+}
+
+func (s *Server) changeTicketLabels(w http.ResponseWriter, r *http.Request) {
+	var in service.ChangeLabelsInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	t, err := s.svc.Tickets.ChangeLabels(r.Context(), principal(r).Actor(), r.PathValue("id"), in)
 	if err != nil {
 		s.fail(w, r, err)
 		return

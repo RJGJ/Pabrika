@@ -12,8 +12,8 @@ type commentBody struct {
 // registerCommentRoutes registers the comment endpoints (spec section 10).
 func (s *Server) registerCommentRoutes() {
 	s.route("GET /api/v1/tickets/{id}/comments", Authed, false, s.listComments)
-	s.route("POST /api/v1/tickets/{id}/comments", Authed, true, s.addComment)
-	s.route("PATCH /api/v1/comments/{id}", Authed, true, s.editComment)
+	s.routeComment("POST /api/v1/tickets/{id}/comments", Authed, s.addComment)
+	s.routeComment("PATCH /api/v1/comments/{id}", Authed, s.editComment)
 	s.route("DELETE /api/v1/comments/{id}", Authed, true, s.deleteComment)
 }
 
