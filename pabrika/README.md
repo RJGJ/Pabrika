@@ -54,6 +54,7 @@ Environment variables:
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `HOST` | empty (all interfaces) | Address to listen on: an IP address or `localhost`. Set `127.0.0.1` for local development so Windows Firewall does not ask for access. Leave empty in containers. |
 | `PORT` | `8080` | HTTP port (1 to 65535). |
 | `DB_PATH` | `./data/pabrika.db` | SQLite file. The image sets `/data/pabrika.db`. |
 | `BASE_URL` | `http://localhost:8080` | Public URL of the app: scheme, host, optional port, no path. Used for the Origin check and links in MCP results. A trailing slash is trimmed. |

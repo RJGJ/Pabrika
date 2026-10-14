@@ -189,7 +189,7 @@ func serve(ctx context.Context, e env, shutdownTimeout time.Duration) error {
 
 	handedOff = true // runServer closes the store from here on
 	return runServer(ctx, serveParams{
-		Addr:    ":" + strconv.Itoa(cfg.Port),
+		Addr:    net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
 		Handler: api.Handler(),
 		Log:     log,
 		StartBackground: func(bg context.Context) <-chan struct{} {
