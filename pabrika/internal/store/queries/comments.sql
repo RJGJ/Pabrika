@@ -41,6 +41,13 @@ WHERE c.ticket_id = sqlc.arg(ticket_id) AND c.deleted_at IS NULL
 ORDER BY c.created_at DESC, c.id DESC
 LIMIT sqlc.arg(row_limit);
 
+-- name: CommentBotBodies :many
+-- Bodies of the live comments written by API tokens on one ticket, newest first (round markers).
+SELECT id, body FROM comments
+WHERE ticket_id = sqlc.arg(ticket_id) AND author_type = 'api_token' AND deleted_at IS NULL
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(row_limit);
+
 -- name: CommentUpdateBody :exec
 UPDATE comments SET body = ?, edited_at = ? WHERE id = ?;
 

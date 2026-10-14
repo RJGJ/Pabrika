@@ -10,8 +10,11 @@ import MarkdownEditor from '@/components/ticket/MarkdownEditor.vue'
 import MarkdownView from '@/components/ticket/MarkdownView.vue'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { toneClasses } from '@/lib/colors'
 import { relativeTime } from '@/lib/dates'
+import { parseRoleTag } from '@/lib/roleTag'
 import { notify } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   comments: Comment[]
@@ -29,6 +32,7 @@ const editError = ref<string | null>(null)
 const deleting = ref<Comment | null>(null)
 const deleteOpen = ref(false)
 
+const tagOf = (c: Comment) => parseRoleTag(c.body, c.author)
 const isMine = (c: Comment) => c.author.type === 'user' && c.author.id === props.meId
 /** Own comments only; a human can never edit an agent's comment. */
 const canEditComment = (c: Comment) => props.canEdit && isMine(c)
@@ -91,9 +95,15 @@ async function confirmDelete(): Promise<void> {
           <UserAvatar :name="c.author.name" />
           <span class="font-medium">{{ c.author.name }}</span>
           <Tooltip v-if="c.author.bot">
-            <TooltipTrigger as-child><span><BotBadge /></span></TooltipTrigger>
+            <TooltipTrigger as-child><span><BotBadge :role="tagOf(c)?.roleLabel" /></span></TooltipTrigger>
             <TooltipContent>API token{{ c.author.owner_name ? ` owned by ${c.author.owner_name}` : '' }}</TooltipContent>
           </Tooltip>
+          <span
+            v-if="tagOf(c)"
+            data-testid="type-chip"
+            :data-tone="tagOf(c)?.tone"
+            :class="cn('rounded-full px-2 py-0 text-[11px] font-medium', toneClasses(tagOf(c)?.tone ?? 'neutral'))"
+          >{{ tagOf(c)?.typeLabel }}</span>
           <time class="text-xs text-muted-foreground" :datetime="c.created_at" :title="c.created_at">
             {{ relativeTime(c.created_at) }}
           </time>
@@ -112,7 +122,7 @@ async function confirmDelete(): Promise<void> {
           @submit="saveEdit(c)"
           @cancel="editingId = null"
         />
-        <MarkdownView v-else :source="c.body" />
+        <MarkdownView v-else :source="tagOf(c)?.text ?? c.body" />
       </li>
     </ul>
   </TooltipProvider>

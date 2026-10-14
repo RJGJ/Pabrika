@@ -133,6 +133,69 @@ type Ticket struct {
 	Labels                    []Label // name order, never nil
 	CommentCount              int
 	CreatedAt, UpdatedAt      time.Time
+
+	// Derived workflow fields (phase 4). PRURL, Branch and Round are a cache parsed from the
+	// description and orchestrator bot comments. Decisions is set only for single-ticket reads
+	// (Get, Create, Update, Move, ChangeLabels), never for list items; DecisionsLoaded says so.
+	PRURL, Branch   *string
+	Round           *Round
+	Decisions       []WorkflowDecision
+	DecisionsLoaded bool
+}
+
+// Round is the review round counter derived from the latest orchestrator marker.
+type Round struct{ N, Max int }
+
+// HasWorkflow reports whether any workflow field is set (the JSON object is null otherwise).
+func (t Ticket) HasWorkflow() bool {
+	return t.PRURL != nil || t.Branch != nil || t.Round != nil || len(t.Decisions) > 0
+}
+
+// DecisionActor is the human behind a decision.
+type DecisionActor struct{ ID, Name, Email string }
+
+// WorkflowDecision is the latest decision of one gate as shown on a single ticket. Current is
+// true only when the decision is newer than the last time the gate label was applied.
+type WorkflowDecision struct {
+	Gate    Gate
+	Verdict Verdict
+	Note    *string
+	At      time.Time
+	By      DecisionActor
+	Role    Role
+	Current bool
+}
+
+// ---- Decisions ----
+
+// DecisionService records and reads human gate decisions. Record is session-only and
+// record-only: it never edits labels or columns.
+type DecisionService interface {
+	Record(ctx context.Context, actor Actor, ticketRef string, in RecordDecisionInput) (Decision, error)
+	List(ctx context.Context, actor Actor, ticketRef string, limit int, cursor string) (DecisionPage, error)
+}
+
+// RecordDecisionInput is the body of a decision. Note is optional, required for changes_requested.
+type RecordDecisionInput struct {
+	Gate    Gate
+	Verdict Verdict
+	Note    *string
+}
+
+type Decision struct {
+	ID, TicketID, TicketRef string
+	Gate                    Gate
+	Verdict                 Verdict
+	Note                    *string
+	Actor                   DecisionActor
+	ActorRole               Role
+	GateLabel               string
+	CreatedAt               time.Time
+}
+
+type DecisionPage struct {
+	Items      []Decision
+	NextCursor string
 }
 
 // ---- Comments ----
@@ -173,6 +236,43 @@ type CommentAuthor struct {
 
 type ActivityService interface {
 	List(ctx context.Context, actor Actor, ticketRef string, limit int, cursor string) (ActivityPage, error)
+	// ListProject is the project-wide feed: ticket activity (decisions included) and comments,
+	// newest first.
+	ListProject(ctx context.Context, actor Actor, projectRef string, f FeedFilter) (FeedPage, error)
+}
+
+// Feed item kinds.
+const (
+	FeedKindActivity = "activity"
+	FeedKindComment  = "comment"
+	FeedKindDecision = "decision"
+)
+
+// FeedFilter narrows the project feed. Kind is "", activity, comment or decision; ActorType is
+// "", user or api_token; Ticket is a ticket reference (KEY-N or id) of the same project.
+type FeedFilter struct {
+	Kind, ActorType, Ticket string
+	Since                   *time.Time // only rows strictly newer than this instant
+	Limit                   int
+	Cursor                  string
+}
+
+type FeedPage struct {
+	Items      []FeedItem
+	NextCursor string
+}
+
+// FeedItem is one row of the feed. Summary is set for comments only (body cut to 200 chars).
+type FeedItem struct {
+	ID, Kind  string
+	TicketID  string
+	TicketRef string
+	Title     string
+	Actor     CommentAuthor
+	Action    string
+	Changes   map[string][2]any
+	Summary   string
+	CreatedAt time.Time
 }
 
 type ActivityPage struct {

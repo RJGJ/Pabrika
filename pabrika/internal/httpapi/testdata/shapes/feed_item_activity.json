@@ -1,0 +1,41 @@
+{
+  "action": "created",
+  "actor": {
+    "bot": false,
+    "id": "01JTESTTESTTESTTESTTESTTES",
+    "name": "Alice",
+    "type": "user"
+  },
+  "changes": {
+    "description": [
+      null,
+      "PR: https://github.com/acme/web/pull/7\nBranch: pabrika/WEB-3-gated"
+    ],
+    "labels": [
+      null,
+      [
+        "awaiting-plan-approval"
+      ]
+    ],
+    "priority": [
+      null,
+      "medium"
+    ],
+    "status": [
+      null,
+      "todo"
+    ],
+    "title": [
+      null,
+      "Gated"
+    ]
+  },
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "id": "01JTESTTESTTESTTESTTESTTES",
+  "kind": "activity",
+  "ticket": {
+    "id": "01JTESTTESTTESTTESTTESTTES",
+    "ref": "WEB-3",
+    "title": "Gated"
+  }
+}

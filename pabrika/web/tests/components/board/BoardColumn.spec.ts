@@ -113,7 +113,7 @@ describe('BoardColumn', () => {
   it('dragging is disabled for viewers, archived projects and while filters are active', async () => {
     let c = await mountColumn('backlog')
     expect(c.props.disabled).toBe(false)
-    c.board.setFilters({ q: 'x', priority: [], assignee: null, label: [] })
+    c.board.setFilters({ q: 'x', priority: [], assignee: null, label: [], attention: false })
     await flushPromises()
     expect(c.wrapper.findComponent(VueDraggable).props('disabled')).toBe(true)
 
@@ -129,7 +129,7 @@ describe('BoardColumn', () => {
 
   it('shows "n of m" while filtering', async () => {
     const { board, wrapper } = await mountColumn('backlog')
-    board.setFilters({ q: 'Ticket 1', priority: [], assignee: null, label: [] })
+    board.setFilters({ q: 'Ticket 1', priority: [], assignee: null, label: [], attention: false })
     await flushPromises()
     expect(wrapper.text()).toContain('1 of 3')
   })

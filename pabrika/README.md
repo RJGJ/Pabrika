@@ -11,7 +11,7 @@ Status: the non-Docker paths (build, run, CLI, REST, MCP, shutdown, restart) wer
 - Projects with four fixed columns (Backlog, To do, In progress, Done), drag and drop, labels, assignees, due dates, priorities and comments.
 - Sharing per project with three roles: owner, editor, viewer. Owners add people who already have an account, by email.
 - Live updates: every change, from the UI, REST or an agent, appears on open boards without a refresh (Server-Sent Events).
-- MCP server at `/mcp` with 16 tools, read, comment or write API tokens, optional single-project tokens.
+- MCP server at `/mcp` with 18 tools, read, comment or write API tokens, optional single-project tokens.
 - Email and password login (argon2id), session cookies, CSRF defences, rate limiting.
 - One container, one process, one volume. No Bun or Node at runtime.
 
@@ -115,7 +115,7 @@ Signed-in users can change their display name and password in account settings. 
 
 Ready-made agent playbooks (standup, triage, planner, worker) are in [agents/](../agents/).
 
-Tools (16). Read tokens see only the first five (5 tools); comment tokens also see `add_comment` and `update_comment` (7 tools); write tokens see all 16:
+Tools (18). Read tokens see only the seven read tools (7 tools); comment tokens also see `add_comment` and `update_comment` (9 tools); write tokens see all 18:
 
 | Tool | Purpose |
 |---|---|
@@ -123,7 +123,9 @@ Tools (16). Read tokens see only the first five (5 tools); comment tokens also s
 | `list_members` | List a project's members |
 | `list_labels` | List a project's labels |
 | `list_tickets` | List tickets with filters and pagination; `labels` (names) keeps only tickets that have all of them (max 10) |
-| `get_ticket` | One ticket with labels, assignee and recent comments |
+| `get_ticket` | One ticket with labels, assignee and recent comments; `workflow` holds the derived PR link, branch, review round and the latest human decision per gate (`current` is true only if the gate label was not applied again since) |
+| `list_decisions` | A ticket's human gate decisions (requirements, plan), newest first, with the decider and note. Read only: agents cannot record decisions |
+| `list_activity` | A project's activity feed (ticket changes, comments cut to 200 characters, decisions), newest first; `since` (RFC 3339) and `kind` filter it |
 | `create_project` | Create a project (write) |
 | `update_project` | Rename, edit description, archive (write, owner) |
 | `create_label` | Create a label (write) |
@@ -137,6 +139,14 @@ Tools (16). Read tokens see only the first five (5 tools); comment tokens also s
 | `delete_ticket` | Soft delete; needs `confirm: true` (write) |
 
 REST equivalents: `POST /api/v1/tickets/{id}/move` accepts `expected_status`; `PATCH /api/v1/tickets/{id}/labels` takes `{"add": [label ids], "remove": [label ids]}`; `GET /api/v1/projects/{id}/tickets?label=<id>&label=<id>` repeats `label` for an all-of filter (other parameters still may be given once). Tokens can be created with scope `read`, `comment` or `write`; a `comment` token can call only `POST /tickets/{id}/comments` and `PATCH /comments/{id}` besides reads, and its role is shown as viewer.
+
+### Gates, workflow fields and the project feed
+
+These are read-only for agents; people act on gates in the app.
+
+- **Derived workflow fields.** A ticket's JSON has a nullable `workflow` object: `pr_url` and `branch` are parsed from description lines `PR: https://...` and `Branch: name` (key at the start of the line, case-sensitive, first match in the first 50 lines, `https` only), and `round` (`{n, max}`) comes from the newest comment written by an API token that starts with `[orchestrator] ROUND n/N` (or contains a `Round: n/N` line). Human comments never set the round. List items carry the same object; `decisions` appears only on a single-ticket read.
+- **Gate decisions.** `POST /api/v1/tickets/{id}/decisions` with `{"gate": "requirements"|"plan", "verdict": "approved"|"changes_requested", "note"?}` records an immutable decision. Session only (every token gets 403 `session_required`), owner or editor only (viewer 403, non-member 404), and the ticket must carry `awaiting-req-approval` (requirements) or `awaiting-plan-approval` (plan) or the call is 409 `gate_not_open`. A note is required for `changes_requested` (max 2,000 characters). It only records: the Orchestrator reads it (`get_ticket` `workflow.decisions`) and changes labels and columns itself. Gate 3 (merge) stays a human merge on GitHub. The label names are fixed in the code. `GET /api/v1/tickets/{id}/decisions` lists them (`{items, next_cursor}`, newest first, any member, read scope is enough). Each decision emits a `decision.recorded` event (`ticket_id`, `decision_id`) on the project's event stream and an activity row with action `decision`.
+- **Project feed.** `GET /api/v1/projects/{id}/activity?limit&cursor&kind&actor_type&ticket` returns `{items, next_cursor}` newest first (limit 50, max 200): items are `{id, kind: activity|comment|decision, ticket: {id, ref, title}, actor, action, changes, summary?, created_at}`; `summary` is the first 200 characters of a comment. Any member, session or read token.
 
 `project` accepts a key (`WEB`) or id, `ticket` a reference (`WEB-12`) or id, `assignee` an email, `labels` label names. Project deletion and member management are not available over MCP.
 

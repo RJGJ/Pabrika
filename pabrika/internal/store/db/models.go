@@ -75,6 +75,10 @@ type Ticket struct {
 	DeletedAt   *string
 	CreatedAt   string
 	UpdatedAt   string
+	PrUrl       *string
+	Branch      *string
+	RoundN      *int64
+	RoundMax    *int64
 }
 
 type TicketActivity struct {
@@ -85,6 +89,19 @@ type TicketActivity struct {
 	Action    string
 	Changes   string
 	CreatedAt string
+}
+
+type TicketDecision struct {
+	ID          string
+	TicketID    string
+	ProjectID   string
+	Gate        string
+	Verdict     string
+	Note        *string
+	ActorUserID string
+	ActorRole   string
+	GateLabel   string
+	CreatedAt   string
 }
 
 type TicketLabel struct {

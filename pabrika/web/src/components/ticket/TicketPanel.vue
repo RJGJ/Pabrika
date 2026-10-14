@@ -16,6 +16,7 @@ import MarkdownEditor from '@/components/ticket/MarkdownEditor.vue'
 import MarkdownView from '@/components/ticket/MarkdownView.vue'
 import PrioritySelect from '@/components/ticket/PrioritySelect.vue'
 import StatusSelect from '@/components/ticket/StatusSelect.vue'
+import WorkflowBlock from '@/components/ticket/WorkflowBlock.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -346,6 +347,17 @@ const PRIORITY_LABEL: Record<string, string> = { low: 'Low', medium: 'Medium', h
               <span v-else class="text-sm text-muted-foreground">No labels</span>
             </div>
           </div>
+
+          <!-- Workflow (stage, round, PR, branch, decisions); absent for plain tickets -->
+          <WorkflowBlock
+            :ticket-id="view.id"
+            :ticket-ref="view.ref"
+            :labels="view.labels"
+            :workflow="view.workflow"
+            :decisions="detail.ticket.value?.workflow?.decisions"
+            @recorded="board.refreshTicket(view.id)"
+            @stale="board.refreshTicket(view.id)"
+          />
 
           <!-- Description -->
           <section class="grid gap-2" aria-labelledby="ticket-desc-h">

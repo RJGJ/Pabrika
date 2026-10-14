@@ -45,7 +45,7 @@ ORDER BY position, id;
 -- (unused slots NULL, which never match); a fixed arity because sqlc slices cannot be mixed safely
 -- with the numbered parameters here.
 SELECT t.id, t.project_id, t.number, t.title, t.status, t.priority, t.assignee_id, t.position,
-       t.due_date, t.created_at, t.updated_at,
+       t.due_date, t.created_at, t.updated_at, t.pr_url, t.branch, t.round_n, t.round_max,
        CAST(CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END AS INTEGER) AS status_rank
 FROM tickets t
 WHERE t.project_id = sqlc.arg(project_id) AND t.deleted_at IS NULL
@@ -132,3 +132,22 @@ RETURNING *;
 -- name: TicketSeedGetRaw :one
 -- Test only: a ticket row including soft-deleted ones.
 SELECT * FROM tickets WHERE id = ?;
+
+-- name: TicketSetLinks :exec
+-- Derived cache of the PR url and branch (parsed from the description). No updated_at bump.
+UPDATE tickets SET pr_url = ?, branch = ? WHERE id = ?;
+
+-- name: TicketSetRound :exec
+-- Derived cache of the review round (parsed from the latest orchestrator bot comment).
+UPDATE tickets SET round_n = ?, round_max = ? WHERE id = ?;
+
+-- name: TicketHasLabelNamed :one
+-- 1 when the ticket currently carries a label with this name (names compare NOCASE).
+SELECT COUNT(*) FROM ticket_labels tl JOIN labels l ON l.id = tl.label_id
+WHERE tl.ticket_id = ? AND l.name = ?;
+
+-- name: TicketLabelChangeRows :many
+-- Activity rows that may carry a labels change, oldest first; the service parses the JSON.
+SELECT id, action, changes, created_at FROM ticket_activity
+WHERE ticket_id = ? AND instr(changes, '"labels"') > 0
+ORDER BY created_at, id;

@@ -13,7 +13,7 @@ cmd/pabrika/       subcommands: serve, user create, user reset-password, healthc
 internal/
   config/          env parsing (HOST, PORT, DB_PATH, BASE_URL, ALLOW_SIGNUP, COOKIE_SECURE, TRUST_PROXY)
   store/           SQLite (modernc.org/sqlite), sqlc output in store/db, queries in store/queries
-  service/         business rules; Actor, authz, validation, ordering, events seam
+  service/         business rules; Actor, authz, validation, ordering, events seam; workflow.go (PR/branch/round parsers, gate labels), decisions.go, activity_feed.go (project feed)
   auth/            argon2id, sessions, API tokens, middleware
   httpapi/         REST handlers, SSE stream, error mapping, SPA handler
   mcpserver/       MCP tools and resources, thin wrappers over service
@@ -78,6 +78,7 @@ go run ./cmd/pabrika version
 - Ticket references look like `WEB-12`; project paths accept the key or the ULID. Ticket JSON uses `ref` and `project_key`.
 - Events are published by the service after DB commit, never from handlers or MCP tools.
 - Token scope and project limit are enforced in the service layer through `Actor`. Scopes are `read`, `comment` (reads plus `Comments.Add` and editing own comments) and `write`; unknown values fail closed to read. REST write routes refuse a `comment` token unless registered with `routeComment` (`Route.CommentOK`). `move` takes an optional `expected_status` and answers `status_conflict` (409) on a mismatch.
+- Gate decisions (`ticket_decisions`, migration 00003) are insert-only, session-only (`requireSession`, plus the `SessionOnly` route), owner/editor-only and record-only: no MCP write tool exists for them and the server never edits labels or columns. Gate label names are constants in `service/workflow.go`. `tickets.pr_url`, `branch`, `round_n`, `round_max` are a derived cache: written in the same transaction as the description edit (`PR:`/`Branch:` lines) or as a bot (`api_token`) comment add/edit/delete (`[orchestrator] ROUND n/N`); never trust them as input. Every decision/comment/feed reader must join `tickets` and filter `deleted_at IS NULL`.
 - Limits: comment body 20,000 characters, ticket description 20,000, title 200, project name 100, description 2,000, label name 50, display name 1 to 100.
 - Commit messages: small, focused commits.
 

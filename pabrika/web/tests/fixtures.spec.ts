@@ -2,7 +2,7 @@
 // and the runtime assertions compare fixture keys to those key sets.
 import { describe, expect, it } from 'vitest'
 import type {
-  Activity, ApiEvent, AuthMe, AuthUser, Comment, CommentAuthor, ErrorBody, Label, Member, MoveResult,
+  Activity, ActivityFeedItem, ApiEvent, Decision, AuthMe, AuthUser, Comment, CommentAuthor, ErrorBody, Label, Member, MoveResult,
   Project, ProjectDetail, Ticket, TicketSummary, Token,
 } from '@/api/types'
 import ticket from './fixtures/ticket.json'
@@ -20,12 +20,15 @@ import token from './fixtures/token.json'
 import envelope from './fixtures/envelope.json'
 import error422 from './fixtures/error-422.json'
 import event from './fixtures/event.json'
+import ticketWorkflow from './fixtures/ticket-workflow.json'
+import decision from './fixtures/decision.json'
+import feedItem from './fixtures/activity-feed-item.json'
 
 type Keys<T> = Record<keyof T, true>
 const ticketSummaryKeys: Keys<TicketSummary> = {
   id: true, ref: true, project_id: true, project_key: true, number: true, title: true, status: true,
   priority: true, assignee: true, labels: true, position: true, due_date: true, comment_count: true,
-  created_at: true, updated_at: true,
+  workflow: true, created_at: true, updated_at: true,
 }
 const ticketKeys: Keys<Ticket> = { ...ticketSummaryKeys, description: true }
 const moveKeys: Keys<MoveResult> = { ...ticketKeys, renumbered: true }
@@ -47,6 +50,14 @@ const tokenKeys: Keys<Token> = {
 const authorKeysBase: Omit<Keys<CommentAuthor>, 'owner_name'> = { type: true, id: true, name: true, bot: true }
 const eventRequired: Pick<Keys<ApiEvent>, 'type' | 'project_id' | 'actor' | 'at'> = {
   type: true, project_id: true, actor: true, at: true,
+}
+
+const decisionKeys: Keys<Decision> = {
+  id: true, ticket_id: true, gate: true, verdict: true, note: true, actor: true, actor_role: true,
+  gate_label: true, created_at: true,
+}
+const feedKeys: Keys<ActivityFeedItem> = {
+  id: true, kind: true, ticket: true, actor: true, action: true, changes: true, summary: true, created_at: true,
 }
 
 const sorted = (o: object) => Object.keys(o).sort()
@@ -86,5 +97,13 @@ describe('fixtures match types.ts', () => {
     expect(e.error.fields?.title).toBeTruthy()
     for (const k of Object.keys(eventRequired)) expect(k in event).toBe(true)
     expect(sorted(event.actor)).toEqual(['id', 'type'])
+  })
+  it('workflow, decision and feed shapes', () => {
+    expect(sorted(ticketWorkflow)).toEqual(sorted(ticketSummaryKeys))
+    expect(sorted(ticketWorkflow.workflow)).toEqual(['branch', 'decisions', 'pr_url', 'round'])
+    expect(sorted(ticketWorkflow.workflow.round)).toEqual(['max', 'n'])
+    expect(sorted(ticketWorkflow.workflow.decisions[0])).toEqual(['at', 'by', 'current', 'gate', 'note', 'verdict'])
+    expect(sorted(decision)).toEqual(sorted(decisionKeys))
+    expect(sorted(feedItem)).toEqual(sorted(feedKeys))
   })
 })

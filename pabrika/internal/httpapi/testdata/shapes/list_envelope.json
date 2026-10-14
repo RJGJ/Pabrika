@@ -26,7 +26,8 @@
       "ref": "WEB-2",
       "status": "in_progress",
       "title": "Full",
-      "updated_at": "2026-01-01T00:00:00.000Z"
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "workflow": null
     }
   ],
   "next_cursor": "eyJ2IjoxLCJrIjpbMiwxMDI0LCIwMUtEVkROQTAwQUU2N1o1TkhEM0pIMDc0ViJdfQ"

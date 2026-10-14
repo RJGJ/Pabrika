@@ -107,6 +107,8 @@ describe('route table', () => {
     const r = makeRouter()
     expect(r.resolve('/p/WEB/settings').name).toBe('project-settings')
     expect(r.resolve('/settings').name).toBe('account')
+    expect(r.resolve('/p/WEB/activity').name).toBe('project-activity')
+    expect(r.resolve('/p/WEB/activity').params).toMatchObject({ key: 'WEB' })
   })
 })
 

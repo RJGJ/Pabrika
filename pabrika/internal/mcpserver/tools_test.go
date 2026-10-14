@@ -41,7 +41,7 @@ func TestResultShapesAndStructured(t *testing.T) {
 	f := newFx(t)
 	cs, _ := f.as(f.alice, service.ScopeWrite)
 	tk := f.okCall(cs, "create_ticket", map[string]any{"project": "WEB", "title": "T1"})
-	want := []string{"assignee", "due_date", "labels", "position", "priority", "ref", "status", "title", "url"}
+	want := []string{"assignee", "due_date", "labels", "position", "priority", "ref", "status", "title", "url", "workflow"}
 	if !reflect.DeepEqual(keysOf(tk), want) {
 		t.Fatalf("ticket keys %v", keysOf(tk))
 	}
@@ -53,7 +53,7 @@ func TestResultShapesAndStructured(t *testing.T) {
 		t.Fatal("no structuredContent")
 	}
 	d := r.JSON()
-	wantD := []string{"assignee", "comment_count", "comments", "comments_truncated", "created_at", "description", "due_date", "labels", "position", "priority", "project", "ref", "status", "title", "updated_at", "url"}
+	wantD := []string{"assignee", "comment_count", "comments", "comments_truncated", "created_at", "description", "due_date", "labels", "position", "priority", "project", "ref", "status", "title", "updated_at", "url", "workflow"}
 	if !reflect.DeepEqual(keysOf(d), wantD) {
 		t.Fatalf("detail keys %v", keysOf(d))
 	}
@@ -598,7 +598,7 @@ func TestProjectAndLabelTools(t *testing.T) {
 func TestScopeAndSurface(t *testing.T) {
 	f := newFx(t)
 	f.seedTicket("WEB", "a", "todo")
-	read := []string{"get_ticket", "list_labels", "list_members", "list_projects", "list_tickets"}
+	read := []string{"get_ticket", "list_activity", "list_decisions", "list_labels", "list_members", "list_projects", "list_tickets"}
 	write := append([]string{"add_comment", "add_label", "create_label", "create_project", "create_ticket", "delete_ticket", "move_ticket", "remove_label", "update_comment", "update_project", "update_ticket"}, read...)
 	sort.Strings(write)
 	rcs, _ := f.as(f.alice, service.ScopeRead)
@@ -610,7 +610,7 @@ func TestScopeAndSurface(t *testing.T) {
 	wcs, _ := f.as(f.alice, service.ScopeWrite)
 	names = toolNames(t, wcs)
 	sort.Strings(names)
-	if !reflect.DeepEqual(names, write) || len(names) != 16 {
+	if !reflect.DeepEqual(names, write) || len(names) != 18 {
 		t.Fatal(names)
 	}
 	for _, n := range names {

@@ -26,7 +26,8 @@ var commentScopeClasses = map[string]string{
 	"TicketService.ChangeLabels": "denied", "TicketService.Delete": "denied",
 	"CommentService.List": "read", "CommentService.Latest": "read", "CommentService.Resolve": "read",
 	"CommentService.Add": "comment", "CommentService.Edit": "comment", "CommentService.Delete": "denied",
-	"ActivityService.List":      "read",
+	"ActivityService.List": "read", "ActivityService.ListProject": "read",
+	"DecisionService.List": "read", "DecisionService.Record": "denied",
 	"UserService.UpdateProfile": "denied",
 	"UserService.Create":        "n/a", "UserService.ValidateNew": "n/a", "UserService.Credentials": "n/a",
 	"UserService.PasswordHash": "n/a", "UserService.SetPassword": "n/a",
@@ -138,6 +139,10 @@ func TestCommentScopeDeniesEveryOtherWrite(t *testing.T) {
 		},
 		"TicketService.Delete":  func() error { return c.Svc.Tickets.Delete(ctx, a, c.seed.Ref) },
 		"CommentService.Delete": func() error { return c.Svc.Comments.Delete(ctx, a, cm.ID) },
+		"DecisionService.Record": func() error {
+			_, err := c.Svc.Decisions.Record(ctx, a, c.seed.Ref, service.RecordDecisionInput{Gate: service.GatePlan, Verdict: service.VerdictApproved})
+			return err
+		},
 		"UserService.UpdateProfile": func() error {
 			_, err := c.Svc.Users.UpdateProfile(ctx, a, "Zed")
 			return err

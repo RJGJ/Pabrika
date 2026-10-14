@@ -83,6 +83,7 @@ const (
 	CodeAnchorInvalid     = "anchor_invalid"
 	CodeInvalidCursor     = "invalid_cursor"
 	CodeStatusConflict    = "status_conflict"
+	CodeGateNotOpen       = "gate_not_open"
 )
 
 // errNotFound returns the one not-found error used for unknown AND not-visible resources,

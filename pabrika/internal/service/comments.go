@@ -169,6 +169,11 @@ func (c *commentService) Add(ctx context.Context, actor Actor, ticketRef, body s
 		}); err != nil {
 			return err
 		}
+		if actor.IsToken() {
+			if err := refreshRound(ctx, tx.Q, loc.ID); err != nil {
+				return err
+			}
+		}
 		tx.Emit(Event{Type: EventCommentAdded, ProjectID: proj.ID, TicketID: loc.ID, CommentID: id})
 		out, err = c.view(ctx, tx.Q, id, FormatRef(loc.ProjectKey, loc.Number))
 		return err
@@ -211,6 +216,11 @@ func (c *commentService) Edit(ctx context.Context, actor Actor, commentID, body 
 		if err := tx.Q.CommentUpdateBody(ctx, db.CommentUpdateBodyParams{Body: b, EditedAt: tktPtr(tx.NowText()), ID: loc.ID}); err != nil {
 			return err
 		}
+		if loc.AuthorType == string(ActorAPIToken) {
+			if err := refreshRound(ctx, tx.Q, loc.TicketID); err != nil {
+				return err
+			}
+		}
 		tx.Emit(Event{Type: EventCommentChanged, ProjectID: proj.ID, TicketID: loc.TicketID, CommentID: loc.ID})
 		out, err = c.view(ctx, tx.Q, loc.ID, ref)
 		return err
@@ -233,6 +243,11 @@ func (c *commentService) Delete(ctx context.Context, actor Actor, commentID stri
 		if err := tx.Q.CommentSoftDelete(ctx, db.CommentSoftDeleteParams{DeletedAt: tktPtr(tx.NowText()), ID: loc.ID}); err != nil {
 			return fmt.Errorf("delete comment: %w", err)
 		}
+		if loc.AuthorType == string(ActorAPIToken) {
+			if err := refreshRound(ctx, tx.Q, loc.TicketID); err != nil {
+				return err
+			}
+		}
 		tx.Emit(Event{Type: EventCommentChanged, ProjectID: proj.ID, TicketID: loc.TicketID, CommentID: loc.ID})
 		return nil
 	})
@@ -253,3 +268,25 @@ func (c *commentService) Resolve(ctx context.Context, actor Actor, commentID str
 }
 
 func tktPtr[T any](v T) *T { return &v }
+
+// roundScanLimit bounds how many recent bot comments are searched for a round marker.
+const roundScanLimit = 200
+
+// refreshRound re-derives the cached review round of a ticket from its live comments written by
+// API tokens (humans never count): the newest comment carrying a valid marker wins, and none
+// clears the cache. Runs in the writer's transaction.
+func refreshRound(ctx context.Context, q *db.Queries, ticketID string) error {
+	rows, err := q.CommentBotBodies(ctx, db.CommentBotBodiesParams{TicketID: ticketID, RowLimit: roundScanLimit})
+	if err != nil {
+		return err
+	}
+	var n, max *int64
+	for _, r := range rows {
+		if a, b, ok := ParseRoundMarker(r.Body); ok {
+			x, y := int64(a), int64(b)
+			n, max = &x, &y
+			break
+		}
+	}
+	return q.TicketSetRound(ctx, db.TicketSetRoundParams{RoundN: n, RoundMax: max, ID: ticketID})
+}

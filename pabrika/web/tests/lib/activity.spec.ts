@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { humanizeActivity } from '@/lib/activity'
+import { humanizeActivity, type ActivityLike } from '@/lib/activity'
 import type { Activity, Member } from '@/api/types'
 
 const members: Member[] = [
@@ -13,7 +13,7 @@ function act(action: string, changes: Record<string, unknown> = {}): Activity {
     actor: { type: 'user', id: 'u1', name: 'Ada', bot: false },
   }
 }
-const h = (a: Activity) => humanizeActivity(a, members)
+const h = (a: ActivityLike) => humanizeActivity(a, members)
 
 describe('humanizeActivity', () => {
   it('created', () => expect(h(act('created'))).toBe('created the ticket'))
@@ -69,5 +69,28 @@ describe('humanizeActivity', () => {
   it('tolerates malformed changes', () => {
     expect(h(act('updated', { priority: 'high' }))).toBe('updated priority')
     expect(h({ ...act('updated'), changes: null as unknown as Record<string, unknown> })).toBe('updated the ticket')
+  })
+})
+
+describe('humanizeActivity decision', () => {
+  it('approved gates', () => {
+    expect(h(act('decision', { requirements: [null, 'approved'] }))).toBe('approved the requirements')
+    expect(h(act('decision', { plan: [null, 'approved'] }))).toBe('approved the plan')
+  })
+  it('requested changes with a note truncated to 200 characters', () => {
+    expect(h(act('decision', { plan: [null, 'changes_requested'], note: 'Split it' }))).toBe('requested changes on the plan: Split it')
+    const long = h({ ...act('decision', { plan: [null, 'changes_requested'] }), summary: 'x'.repeat(500) })
+    expect(long.startsWith('requested changes on the plan: ')).toBe(true)
+    expect(long.length).toBeLessThanOrEqual('requested changes on the plan: '.length + 203)
+  })
+  it('requested changes without a note, and unknown gate names', () => {
+    expect(h(act('decision', { plan: [null, 'changes_requested'] }))).toBe('requested changes on the plan')
+    expect(h(act('decision', { gate: [null, 'approved'] }))).toBe('approved')
+    // The row the backend actually writes.
+    expect(h(act('decision', { gate: [null, 'approved'], gate_name: [null, 'requirements'], note: [null, ''] }))).toBe('approved the requirements')
+    expect(h(act('decision', { gate: [null, 'changes_requested'], gate_name: [null, 'plan'], note: [null, 'Split it'] }))).toBe(
+      'requested changes on the plan: Split it',
+    )
+    expect(h(act('decision', {}))).toBe('recorded a decision')
   })
 })

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SearchIcon, XIcon } from '@lucide/vue'
+import { RouterLink } from 'vue-router'
+import { ActivityIcon, BellRingIcon, SearchIcon, XIcon } from '@lucide/vue'
 import { PRIORITIES, type Priority } from '@/api/types'
 import LiveIndicator from '@/components/board/LiveIndicator.vue'
 import { Button } from '@/components/ui/button'
@@ -92,10 +93,24 @@ function toggleLabel(id: string, on: boolean): void {
       </DropdownMenuContent>
     </DropdownMenu>
 
+    <Button
+      variant="outline"
+      size="sm"
+      data-testid="attention-filter"
+      :aria-pressed="f.filters.value.attention"
+      :class="f.filters.value.attention ? 'border-ring bg-accent' : ''"
+      @click="f.setAttention(!f.filters.value.attention)"
+    ><BellRingIcon /> Needs my attention</Button>
+
     <Button v-if="f.active.value" variant="ghost" size="sm" @click="f.clear()"><XIcon /> Clear filters</Button>
     <span v-if="f.active.value && board.canEdit" class="text-xs text-muted-foreground" role="note">
       Clear filters to drag tickets
     </span>
-    <div class="ml-auto"><LiveIndicator /></div>
+    <div class="ml-auto flex items-center gap-3">
+      <Button v-if="board.project" as-child variant="ghost" size="sm">
+        <RouterLink :to="{ name: 'project-activity', params: { key: board.project.key } }"><ActivityIcon /> Activity</RouterLink>
+      </Button>
+      <LiveIndicator />
+    </div>
   </div>
 </template>

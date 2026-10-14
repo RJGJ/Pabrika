@@ -56,10 +56,45 @@ function describeField(field: string, value: unknown, action: string, members: M
   }
 }
 
+const GATE_NAME: Record<string, string> = { requirements: 'the requirements', plan: 'the plan' }
+const NOTE_MAX = 200
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max).trimEnd()}...` : s
+}
+
+/**
+ * A recorded gate decision. The gate is the key of `changes` (`{requirements: [null, "approved"]}`);
+ * a `{gate: [null, verdict]}` row without a gate name reads as a plain decision. The note comes from
+ * `changes.note` or the feed `summary`.
+ */
+function describeDecision(a: ActivityLike): string {
+  const changes = (a.changes && typeof a.changes === 'object' ? a.changes : {}) as Record<string, unknown>
+  // Backend row: {gate: [null, verdict], gate_name: [null, "requirements"|"plan"], note: [null, text]}.
+  const newValue = (v: unknown): unknown => (isPair(v) ? (v as Pair)[1] : v)
+  const nameRaw = newValue(changes.gate_name)
+  const gateKey = typeof nameRaw === 'string' && nameRaw in GATE_NAME ? nameRaw : Object.keys(changes).find((k) => k in GATE_NAME)
+  // Older shape: the gate is the key, {requirements: [null, verdict]}.
+  const verdict = newValue(changes.gate) ?? (gateKey ? newValue(changes[gateKey]) : undefined) ?? changes.verdict
+  const gate = gateKey ? ` ${GATE_NAME[gateKey]}` : ''
+  const noteVal = newValue(changes.note)
+  const noteRaw = typeof noteVal === 'string' ? noteVal : a.summary
+  const note = noteRaw?.trim() ? truncate(noteRaw.trim(), NOTE_MAX) : ''
+  if (verdict === 'approved') return `approved${gate}`
+  if (verdict === 'changes_requested') {
+    const on = gateKey ? ` on ${GATE_NAME[gateKey]}` : ''
+    return `requested changes${on}${note ? `: ${note}` : ''}`
+  }
+  return 'recorded a decision'
+}
+
+export type ActivityLike = Pick<Activity, 'action' | 'changes'> & { summary?: string }
+
 /** Human text for an activity row, without the actor (the UI renders the actor separately). */
-export function humanizeActivity(a: Activity, members: Member[]): string {
+export function humanizeActivity(a: ActivityLike, members: Member[]): string {
   if (a.action === 'created') return 'created the ticket'
   if (a.action === 'deleted') return 'deleted the ticket'
+  if (a.action === 'decision') return describeDecision(a)
   const changes = a.changes && typeof a.changes === 'object' ? a.changes : {}
   const fields = Object.keys(changes)
   const parts = fields

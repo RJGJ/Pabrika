@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { PlusIcon, SettingsIcon } from '@lucide/vue'
+import { ActivityIcon, PlusIcon, SettingsIcon } from '@lucide/vue'
 import CreateProjectDialog from '@/components/project/CreateProjectDialog.vue'
 import UserMenu from '@/components/layout/UserMenu.vue'
 import { Button } from '@/components/ui/button'
@@ -11,15 +11,23 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSkeleton,
 } from '@/components/ui/sidebar'
 import { Switch } from '@/components/ui/switch'
+import { useBoardStore } from '@/stores/board'
 import { useProjectsStore } from '@/stores/projects'
 
 const projects = useProjectsStore()
+const board = useBoardStore()
 const route = useRoute()
 const createOpen = ref(false)
 
 onMounted(() => {
   if (!projects.loaded && !projects.loading) void projects.fetch()
 })
+
+/** Gate tickets are known only for the project whose board is loaded. */
+function gateCount(key: string): number {
+  const p = board.project
+  return p && board.ticketsLoaded && p.key.toLowerCase() === key.toLowerCase() ? board.gateCount : 0
+}
 
 function isActive(key: string): boolean {
   const k = route.params.key
@@ -48,7 +56,17 @@ function isActive(key: string): boolean {
               <SidebarMenuButton as-child :is-active="isActive(p.key)">
                 <RouterLink :to="{ name: 'board', params: { key: p.key } }">
                   <span class="truncate">{{ p.name }}</span>
-                  <span class="ml-auto font-mono text-xs text-muted-foreground">{{ p.key }}</span>
+                  <span
+                    v-if="gateCount(p.key) > 0"
+                    class="ml-auto rounded-full bg-amber-100 px-1.5 text-xs font-medium text-amber-900 dark:bg-amber-900/60 dark:text-amber-200"
+                    data-testid="gate-count"
+                  >{{ gateCount(p.key) }}<span class="sr-only"> tickets waiting for you</span></span>
+                  <span :class="['font-mono text-xs text-muted-foreground', gateCount(p.key) > 0 ? '' : 'ml-auto']">{{ p.key }}</span>
+                </RouterLink>
+              </SidebarMenuButton>
+              <SidebarMenuButton v-if="isActive(p.key)" as-child size="sm" class="pl-6" :is-active="route.name === 'project-activity'">
+                <RouterLink :to="{ name: 'project-activity', params: { key: p.key } }" data-testid="sidebar-activity">
+                  <ActivityIcon /><span>Activity</span>
                 </RouterLink>
               </SidebarMenuButton>
             </SidebarMenuItem>

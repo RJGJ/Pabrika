@@ -9,6 +9,47 @@ import (
 	"context"
 )
 
+const commentBotBodies = `-- name: CommentBotBodies :many
+SELECT id, body FROM comments
+WHERE ticket_id = ?1 AND author_type = 'api_token' AND deleted_at IS NULL
+ORDER BY created_at DESC, id DESC
+LIMIT ?2
+`
+
+type CommentBotBodiesParams struct {
+	TicketID string
+	RowLimit int64
+}
+
+type CommentBotBodiesRow struct {
+	ID   string
+	Body string
+}
+
+// Bodies of the live comments written by API tokens on one ticket, newest first (round markers).
+func (q *Queries) CommentBotBodies(ctx context.Context, arg CommentBotBodiesParams) ([]CommentBotBodiesRow, error) {
+	rows, err := q.db.QueryContext(ctx, commentBotBodies, arg.TicketID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CommentBotBodiesRow
+	for rows.Next() {
+		var i CommentBotBodiesRow
+		if err := rows.Scan(&i.ID, &i.Body); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const commentGetView = `-- name: CommentGetView :one
 SELECT c.id, c.ticket_id, c.author_type, c.author_id, c.body, c.created_at, c.edited_at,
        u.display_name AS user_name, tk.name AS token_name, ou.display_name AS owner_name
