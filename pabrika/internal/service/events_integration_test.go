@@ -97,6 +97,7 @@ var catalogMethods = []string{
 	"LabelService.Create", "LabelService.Update", "LabelService.Delete",
 	"MemberService.Add", "MemberService.SetRole", "MemberService.Remove",
 	"ProjectService.Update",
+	"DecisionService.Record",
 }
 
 func TestEventsCatalogRows(t *testing.T) {
@@ -110,6 +111,8 @@ func TestEventsCatalogRows(t *testing.T) {
 		tk      service.Ticket
 		cm      service.Comment
 		lb      service.Label
+		gateLb  service.Label
+		dec     service.Decision
 		moveRes service.MoveResult
 	)
 	type row struct {
@@ -152,6 +155,18 @@ func TestEventsCatalogRows(t *testing.T) {
 			_, err = e.Svc.Tickets.ChangeLabels(ctx, owner, tk.Ref, service.ChangeLabelsInput{Add: []string{lb.ID}})
 			return
 		}, want: service.Event{Type: service.EventTicketUpdated}, ids: func(ev *service.Event) { ev.TicketID = tk.ID }},
+		{name: "gate label created", method: "LabelService.Create", run: func() (err error) {
+			gateLb, err = e.Svc.Labels.Create(ctx, owner, e.P.Key, service.LabelInput{Name: service.LabelAwaitingPlanApproval, Color: "amber"})
+			return
+		}, want: service.Event{Type: service.EventLabelChanged}, ids: func(ev *service.Event) { ev.LabelID = gateLb.ID }},
+		{name: "gate labeled", method: "TicketService.ChangeLabels", run: func() (err error) {
+			_, err = e.Svc.Tickets.ChangeLabels(ctx, owner, tk.Ref, service.ChangeLabelsInput{Add: []string{gateLb.ID}})
+			return
+		}, want: service.Event{Type: service.EventTicketUpdated}, ids: func(ev *service.Event) { ev.TicketID = tk.ID }},
+		{name: "decision recorded", method: "DecisionService.Record", run: func() (err error) {
+			dec, err = e.Svc.Decisions.Record(ctx, owner, tk.Ref, service.RecordDecisionInput{Gate: service.GatePlan, Verdict: service.VerdictApproved})
+			return
+		}, want: service.Event{Type: service.EventDecisionRecorded}, ids: func(ev *service.Event) { ev.TicketID, ev.DecisionID = tk.ID, dec.ID }},
 		{name: "label updated", method: "LabelService.Update", run: func() (err error) {
 			_, err = e.Svc.Labels.Update(ctx, owner, lb.ID, service.UpdateLabelInput{Name: service.Some("bugs")})
 			return
@@ -663,7 +678,7 @@ var noEventMethods = []string{
 	"LabelService.List",
 	"TicketService.Get", "TicketService.List", "TicketService.Resolve",
 	"CommentService.List", "CommentService.Latest", "CommentService.Resolve",
-	"ActivityService.List",
+	"ActivityService.List", "ActivityService.ListProject", "DecisionService.List",
 	"UserService.UpdateProfile", "UserService.Create", "UserService.ValidateNew", "UserService.Credentials",
 	"UserService.PasswordHash", "UserService.SetPassword",
 	"TokenService.Create", "TokenService.List", "TokenService.Revoke",
@@ -678,6 +693,7 @@ func serviceMethods() map[string]bool {
 		reflect.TypeOf((*service.TicketService)(nil)).Elem(),
 		reflect.TypeOf((*service.CommentService)(nil)).Elem(),
 		reflect.TypeOf((*service.ActivityService)(nil)).Elem(),
+		reflect.TypeOf((*service.DecisionService)(nil)).Elem(),
 		reflect.TypeOf((*service.UserService)(nil)).Elem(),
 		reflect.TypeOf((*service.TokenService)(nil)).Elem(),
 	} {

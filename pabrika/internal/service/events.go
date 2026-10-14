@@ -9,15 +9,16 @@ import "time"
 type EventType string
 
 const (
-	EventTicketCreated  EventType = "ticket.created"
-	EventTicketUpdated  EventType = "ticket.updated"
-	EventTicketMoved    EventType = "ticket.moved"
-	EventTicketDeleted  EventType = "ticket.deleted"
-	EventCommentAdded   EventType = "comment.added"
-	EventCommentChanged EventType = "comment.changed"
-	EventLabelChanged   EventType = "label.changed"
-	EventMemberChanged  EventType = "member.changed"
-	EventProjectUpdated EventType = "project.updated"
+	EventTicketCreated    EventType = "ticket.created"
+	EventTicketUpdated    EventType = "ticket.updated"
+	EventTicketMoved      EventType = "ticket.moved"
+	EventTicketDeleted    EventType = "ticket.deleted"
+	EventCommentAdded     EventType = "comment.added"
+	EventCommentChanged   EventType = "comment.changed"
+	EventLabelChanged     EventType = "label.changed"
+	EventMemberChanged    EventType = "member.changed"
+	EventProjectUpdated   EventType = "project.updated"
+	EventDecisionRecorded EventType = "decision.recorded"
 )
 
 // EventActor is who caused an event: never the whole Actor. ID is the token id for api_token.
@@ -36,6 +37,7 @@ type Event struct {
 	TicketID   string     `json:"ticket_id,omitempty"`
 	CommentID  string     `json:"comment_id,omitempty"`
 	LabelID    string     `json:"label_id,omitempty"`
+	DecisionID string     `json:"decision_id,omitempty"`
 	UserID     string     `json:"user_id,omitempty"`    // member.changed: the affected member
 	Renumbered bool       `json:"renumbered,omitempty"` // ticket.moved: the column was renumbered
 	Actor      EventActor `json:"actor"`

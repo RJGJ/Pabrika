@@ -40,16 +40,18 @@ type ticketRow struct {
 	Position             float64
 	DueDate              *string
 	CreatedAt, UpdatedAt string
+	PRURL, Branch        *string
+	RoundN, RoundMax     *int64
 }
 
 func rowFromTicket(t db.Ticket) ticketRow {
 	return ticketRow{t.ID, t.ProjectID, t.Number, t.Title, t.Description, t.Status, t.Priority,
-		t.AssigneeID, t.Position, t.DueDate, t.CreatedAt, t.UpdatedAt}
+		t.AssigneeID, t.Position, t.DueDate, t.CreatedAt, t.UpdatedAt, t.PrUrl, t.Branch, t.RoundN, t.RoundMax}
 }
 
 func rowFromListRow(r db.TicketListPageRow) ticketRow {
 	return ticketRow{r.ID, r.ProjectID, r.Number, r.Title, "", r.Status, r.Priority,
-		r.AssigneeID, r.Position, r.DueDate, r.CreatedAt, r.UpdatedAt}
+		r.AssigneeID, r.Position, r.DueDate, r.CreatedAt, r.UpdatedAt, r.PrUrl, r.Branch, r.RoundN, r.RoundMax}
 }
 
 // hydrateTickets loads labels, assignees and comment counts for any slice of tickets in at most
@@ -106,6 +108,10 @@ func (s *Services) hydrateTickets(ctx context.Context, q *db.Queries, projectKey
 		if t.Labels == nil {
 			t.Labels = []Label{}
 		}
+		t.PRURL, t.Branch = r.PRURL, r.Branch
+		if r.RoundN != nil && r.RoundMax != nil {
+			t.Round = &Round{N: int(*r.RoundN), Max: int(*r.RoundMax)}
+		}
 		if r.AssigneeID != nil {
 			if u, ok := users[*r.AssigneeID]; ok {
 				u := u
@@ -127,7 +133,20 @@ func (s *Services) loadTicket(ctx context.Context, q *db.Queries, projectKey, id
 	if err != nil {
 		return Ticket{}, err
 	}
-	return ts[0], nil
+	t := ts[0]
+	t.Decisions, err = latestDecisions(ctx, q, id)
+	if err != nil {
+		return Ticket{}, err
+	}
+	t.DecisionsLoaded = true
+	return t, nil
+}
+
+// setDerivedLinks re-derives the cached PR url and branch from a description (same transaction
+// as the write). A removed line clears the value.
+func setDerivedLinks(ctx context.Context, q *db.Queries, ticketID, description string) error {
+	pr, br := ParseDescriptionLinks(description)
+	return q.TicketSetLinks(ctx, db.TicketSetLinksParams{PrUrl: pr, Branch: br, ID: ticketID})
 }
 
 // ---- activity writer ----
@@ -135,6 +154,7 @@ func (s *Services) loadTicket(ctx context.Context, q *db.Queries, projectKey, id
 var ticketActivityKeys = map[string]bool{
 	"title": true, "description": true, "priority": true, "due_date": true,
 	"assignee": true, "labels": true, "status": true, "position": true,
+	"gate": true, "gate_name": true, "note": true,
 }
 
 // recordTicketActivity writes one ticket_activity row inside the caller's transaction. It refuses
@@ -338,6 +358,9 @@ func (t *ticketService) Create(ctx context.Context, actor Actor, projectRef stri
 		}
 		if len(labels) > 0 {
 			changes["labels"] = [2]any{nil, tktLabelNames(labels)}
+		}
+		if err := setDerivedLinks(ctx, tx.Q, id, in.Description); err != nil {
+			return err
 		}
 		if err := recordTicketActivity(ctx, tx, actor, id, "created", changes); err != nil {
 			return err
@@ -567,6 +590,11 @@ func (t *ticketService) Update(ctx context.Context, actor Actor, ref string, in 
 			UpdatedAt: tx.NowText(), ID: cur.ID,
 		}); err != nil {
 			return err
+		}
+		if _, ok := changes["description"]; ok {
+			if err := setDerivedLinks(ctx, tx.Q, cur.ID, desc); err != nil {
+				return err
+			}
 		}
 		if labelsChanged {
 			if err := tx.Q.TicketClearLabels(ctx, cur.ID); err != nil {

@@ -15,20 +15,20 @@ func TestCommentTokenSurface(t *testing.T) {
 	f.seedTicket("WEB", "a", "todo")
 	ccs, _ := f.as(f.alice, service.ScopeComment)
 
-	// exactly the 5 read tools plus the 2 comment tools
-	want := []string{"add_comment", "get_ticket", "list_labels", "list_members", "list_projects", "list_tickets", "update_comment"}
+	// exactly the 7 read tools plus the 2 comment tools
+	want := []string{"add_comment", "get_ticket", "list_activity", "list_decisions", "list_labels", "list_members", "list_projects", "list_tickets", "update_comment"}
 	names := toolNames(t, ccs)
 	sort.Strings(names)
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("comment token tools %v", names)
 	}
-	// counts per scope: 5 / 7 / 16
+	// counts per scope: 7 / 9 / 18
 	rcs, _ := f.as(f.alice, service.ScopeRead)
 	wcs, _ := f.as(f.alice, service.ScopeWrite)
-	if n := len(toolNames(t, rcs)); n != 5 {
+	if n := len(toolNames(t, rcs)); n != 7 {
 		t.Fatalf("read tools %d", n)
 	}
-	if n := len(toolNames(t, wcs)); n != 16 {
+	if n := len(toolNames(t, wcs)); n != 18 {
 		t.Fatalf("write tools %d", n)
 	}
 

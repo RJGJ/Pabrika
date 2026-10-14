@@ -150,13 +150,18 @@ var (
 	specTicket   = spec{"id": "ulid", "ref": "ref", "project_id": "ulid", "project_key": "string", "number": "int",
 		"title": "string", "description": "string", "status": "string", "priority": "string",
 		"assignee": "null", "labels": "array", "position": "number", "due_date": "null",
-		"comment_count": "int", "created_at": "time", "updated_at": "time"}
+		"comment_count": "int", "workflow": "null", "created_at": "time", "updated_at": "time"}
 	specTicketItem = with(specTicket, "description", "-")
 	specAuthorUser = spec{"type": "string", "id": "ulid", "name": "string", "bot": "bool"}
 	specAuthorBot  = with(specAuthorUser, "owner_name", "string")
 	specComment    = spec{"id": "ulid", "ticket_id": "ulid", "author": "object", "body": "string",
 		"created_at": "time", "edited_at": "null"}
 	specActivity = spec{"id": "ulid", "ticket_id": "ulid", "actor": "object", "action": "string",
+		"changes": "object", "created_at": "time"}
+	specWorkflow = spec{"pr_url": "string", "branch": "string", "round": "object"}
+	specDecision = spec{"id": "ulid", "ticket_id": "ulid", "gate": "string", "verdict": "string", "note": "string",
+		"actor": "object", "actor_role": "string", "gate_label": "string", "created_at": "time"}
+	specFeedItem = spec{"id": "ulid", "kind": "string", "ticket": "object", "actor": "object", "action": "string",
 		"changes": "object", "created_at": "time"}
 	specToken = spec{"id": "ulid", "name": "string", "token_prefix": "prefix", "scope": "string",
 		"project": "null", "last_used_at": "null", "revoked_at": "null", "created_at": "time"}
@@ -482,6 +487,78 @@ func TestGoldenShapes(t *testing.T) {
 	}
 	fx.add("activity_user", actUser)
 	fx.add("activity_token", actBot)
+
+	// ---- workflow: derived fields, decisions and the project feed ----
+	gateLab := do(201, "POST", "/api/v1/projects/WEB/labels", map[string]any{"name": "awaiting-plan-approval", "color": "amber"}, As(alice)).JSON(t)
+	gated := do(201, "POST", "/api/v1/projects/WEB/tickets", map[string]any{
+		"title": "Gated", "description": "PR: https://github.com/acme/web/pull/7\nBranch: pabrika/WEB-3-gated",
+		"labels": []string{gateLab["id"].(string)},
+	}, As(alice)).JSON(t)
+	gref := gated["ref"].(string)
+	do(201, "POST", "/api/v1/tickets/"+gref+"/comments", map[string]any{"body": "[orchestrator] ROUND 2/3"}, Bearer(writeSecret))
+	dec := do(201, "POST", "/api/v1/tickets/"+gref+"/decisions", map[string]any{"gate": "plan", "verdict": "approved", "note": "Looks good"}, As(alice)).JSON(t)
+	check(t, "decision", dec, specDecision)
+	check(t, "decision.actor", obj(t, dec["actor"]), spec{"id": "ulid", "name": "string"})
+	if dec["gate"] != "plan" || dec["verdict"] != "approved" || dec["actor_role"] != "owner" || dec["gate_label"] != "awaiting-plan-approval" {
+		t.Errorf("decision: %v", dec)
+	}
+	fx.add("decision", dec)
+	gd := do(200, "GET", "/api/v1/tickets/"+gref, nil, As(alice)).JSON(t)
+	check(t, "ticket (workflow)", gd, with(specTicket, "workflow", "object", "labels", "array", "comment_count", "int"))
+	wf := obj(t, gd["workflow"])
+	check(t, "ticket.workflow", wf, with(specWorkflow, "decisions", "array"))
+	check(t, "ticket.workflow.round", obj(t, wf["round"]), spec{"n": "int", "max": "int"})
+	wd := obj(t, wf["decisions"].([]any)[0])
+	check(t, "ticket.workflow.decisions[0]", wd, spec{"gate": "string", "verdict": "string", "note": "string", "at": "time", "by": "object", "current": "bool"})
+	check(t, "ticket.workflow.decisions[0].by", obj(t, wd["by"]), spec{"id": "ulid", "name": "string"})
+	if wf["pr_url"] != "https://github.com/acme/web/pull/7" || wf["branch"] != "pabrika/WEB-3-gated" || wd["current"] != true {
+		t.Errorf("workflow: %v", wf)
+	}
+	fx.add("ticket_workflow", gd)
+	for _, it := range items(do(200, "GET", "/api/v1/projects/WEB/tickets", nil, As(alice))) {
+		if m := obj(t, it); m["ref"] == gref {
+			check(t, "ticket list item (workflow)", m, with(specTicketItem, "workflow", "object", "labels", "array"))
+			check(t, "list item workflow", obj(t, m["workflow"]), specWorkflow)
+			fx.add("ticket_list_item_workflow", m)
+		}
+	}
+	dl := do(200, "GET", "/api/v1/tickets/"+gref+"/decisions", nil, As(alice))
+	check(t, "decision list envelope", dl.JSON(t), spec{"items": "array", "next_cursor": "null"})
+	check(t, "decision list item", obj(t, items(dl)[0]), specDecision)
+	feed := do(200, "GET", "/api/v1/projects/WEB/activity?limit=50", nil, As(alice))
+	check(t, "feed envelope", feed.JSON(t), spec{"items": "array", "next_cursor": "null"})
+	var feedAct, feedCom, feedDec map[string]any
+	for _, it := range items(feed) {
+		m := obj(t, it)
+		switch m["kind"] {
+		case "activity":
+			if feedAct == nil {
+				feedAct = m
+			}
+		case "comment":
+			if feedCom == nil && obj(t, m["actor"])["type"] == "api_token" {
+				feedCom = m
+			}
+		case "decision":
+			if feedDec == nil {
+				feedDec = m
+			}
+		}
+	}
+	if feedAct == nil || feedCom == nil || feedDec == nil {
+		t.Fatalf("need an activity, comment and decision feed row: %s", feed.Body)
+	}
+	check(t, "feed item (activity)", feedAct, specFeedItem)
+	check(t, "feed item (comment)", feedCom, with(specFeedItem, "summary", "string"))
+	check(t, "feed item (decision)", feedDec, specFeedItem)
+	check(t, "feed item ticket", obj(t, feedCom["ticket"]), spec{"id": "ulid", "ref": "ref", "title": "string"})
+	check(t, "feed item actor (bot)", obj(t, feedCom["actor"]), specAuthorBot)
+	if feedCom["action"] != "commented" || feedDec["action"] != "decision" {
+		t.Errorf("feed actions: %v %v", feedCom["action"], feedDec["action"])
+	}
+	fx.add("feed_item_activity", feedAct)
+	fx.add("feed_item_comment", feedCom)
+	fx.add("feed_item_decision", feedDec)
 
 	// ---- tokens ----
 	tc := do(201, "POST", "/api/v1/tokens", map[string]any{"name": "ci", "scope": "write"}, As(alice)).JSON(t)

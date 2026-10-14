@@ -18,6 +18,8 @@ type Querier interface {
 	ActivityList(ctx context.Context, arg ActivityListParams) ([]ActivityListRow, error)
 	// Test only: raw activity rows of a ticket (including soft-deleted tickets), oldest first.
 	ActivitySeedListRaw(ctx context.Context, ticketID string) ([]TicketActivity, error)
+	// Bodies of the live comments written by API tokens on one ticket, newest first (round markers).
+	CommentBotBodies(ctx context.Context, arg CommentBotBodiesParams) ([]CommentBotBodiesRow, error)
 	// A live comment with resolved author names (LEFT JOINs: missing rows give NULL names).
 	CommentGetView(ctx context.Context, id string) (CommentGetViewRow, error)
 	// Comment queries. Every name carries the Comment prefix.
@@ -39,7 +41,20 @@ type Querier interface {
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DecisionGetView(ctx context.Context, id string) (DecisionGetViewRow, error)
+	// Decision queries. Every name carries the Decision prefix. Rows are insert-only: there is no
+	// update or delete query. Every reader joins tickets and hides soft-deleted ones.
+	DecisionInsert(ctx context.Context, arg DecisionInsertParams) error
+	// The newest decision of each gate of one ticket.
+	DecisionLatestPerGate(ctx context.Context, ticketID string) ([]DecisionLatestPerGateRow, error)
+	// Newest first by (created_at, id); keyset in expanded OR form.
+	DecisionList(ctx context.Context, arg DecisionListParams) ([]DecisionListRow, error)
 	DeleteSessionsForUserExcept(ctx context.Context, arg DeleteSessionsForUserExceptParams) (int64, error)
+	// Project-wide feed. Every name carries the Feed prefix.
+	// Newest first by (created_at, id) over two sources: ticket_activity (kind 'activity', or
+	// 'decision' for the decision action) and live comments (kind 'comment', body cut to 200
+	// characters). Tickets and comments are soft-deleted, so both are filtered explicitly.
+	FeedList(ctx context.Context, arg FeedListParams) ([]FeedListRow, error)
 	GetAPIToken(ctx context.Context, id string) (ApiToken, error)
 	// Resolves a project by id OR key together with the user's membership in one query.
 	// Pass the ULID in ref_id (or "") and the uppercased key in ref_key (or "").
@@ -107,8 +122,12 @@ type Querier interface {
 	TicketCommentCounts(ctx context.Context, ticketIds []string) ([]TicketCommentCountsRow, error)
 	// A live (not soft-deleted) ticket by id.
 	TicketGet(ctx context.Context, id string) (Ticket, error)
+	// 1 when the ticket currently carries a label with this name (names compare NOCASE).
+	TicketHasLabelNamed(ctx context.Context, arg TicketHasLabelNamedParams) (int64, error)
 	TicketInsert(ctx context.Context, arg TicketInsertParams) error
 	TicketIsMember(ctx context.Context, arg TicketIsMemberParams) (int64, error)
+	// Activity rows that may carry a labels change, oldest first; the service parses the JSON.
+	TicketLabelChangeRows(ctx context.Context, ticketID string) ([]TicketLabelChangeRowsRow, error)
 	// Batched label hydration (name order via the NOCASE column collation, then id).
 	TicketLabelsForTickets(ctx context.Context, ticketIds []string) ([]TicketLabelsForTicketsRow, error)
 	// Labels of one project among the given ids, in name order (validates ownership and gives names).
@@ -128,8 +147,12 @@ type Querier interface {
 	TicketSeedGetRaw(ctx context.Context, id string) (Ticket, error)
 	// Test seeding only: a label without going through the Labels service.
 	TicketSeedLabel(ctx context.Context, arg TicketSeedLabelParams) (Label, error)
+	// Derived cache of the PR url and branch (parsed from the description). No updated_at bump.
+	TicketSetLinks(ctx context.Context, arg TicketSetLinksParams) error
 	// Renumbering: position only, no updated_at bump.
 	TicketSetPosition(ctx context.Context, arg TicketSetPositionParams) error
+	// Derived cache of the review round (parsed from the latest orchestrator bot comment).
+	TicketSetRound(ctx context.Context, arg TicketSetRoundParams) error
 	TicketSoftDelete(ctx context.Context, arg TicketSoftDeleteParams) (int64, error)
 	// Bumps updated_at only (label changes that go through ChangeLabels).
 	TicketTouch(ctx context.Context, arg TicketTouchParams) error

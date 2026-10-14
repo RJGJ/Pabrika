@@ -167,6 +167,15 @@ func (w *mworld) scene(t testing.TB) *mscene {
 		t.Fatalf("seed comment: %d %s", r.Code, r.Body)
 	}
 	sc.commentID = r.JSON(t)["id"].(string)
+	// the seed ticket waits at the plan gate, so decisions can be recorded on it
+	r = h.Do(t, "POST", "/api/v1/projects/"+sc.proj.Key+"/labels", map[string]any{"name": "awaiting-plan-approval", "color": "amber"}, As(own))
+	if r.Code != 201 {
+		t.Fatalf("gate label: %d %s", r.Code, r.Body)
+	}
+	r = h.Do(t, "PATCH", "/api/v1/tickets/"+sc.tkRef+"/labels", map[string]any{"add": []string{r.JSON(t)["id"].(string)}}, As(own))
+	if r.Code != 200 {
+		t.Fatalf("gate label on ticket: %d %s", r.Code, r.Body)
+	}
 	return sc
 }
 
@@ -322,6 +331,12 @@ var mrows = map[string]mrow{
 	"POST /api/v1/tickets/{id}/move":     {acc: "authed", write: true, min: rEditor, scoped: true, ok: 200, body: jb(map[string]any{"status": "done"})},
 	"PATCH /api/v1/tickets/{id}/labels":  {acc: "authed", write: true, min: rEditor, scoped: true, ok: 200, body: jb(map[string]any{"remove": []string{"01ARZ3NDEKTSV4RRFFQ69G5FAV"}})},
 	"GET /api/v1/tickets/{id}/activity":  {acc: "authed", min: rViewer, scoped: true, ok: 200},
+	"GET /api/v1/projects/{id}/activity": {acc: "authed", min: rViewer, scoped: true, ok: 200},
+
+	// Decisions: recording is session-only (every token gets 403 session_required) and needs an
+	// editor or owner; reading is open to any member and any token scope.
+	"POST /api/v1/tickets/{id}/decisions": {acc: "session", write: true, min: rEditor, scoped: true, ok: 201, body: jb(map[string]any{"gate": "plan", "verdict": "approved"})},
+	"GET /api/v1/tickets/{id}/decisions":  {acc: "authed", min: rViewer, scoped: true, ok: 200},
 
 	"GET /api/v1/tickets/{id}/comments":  {acc: "authed", min: rViewer, scoped: true, ok: 200},
 	"POST /api/v1/tickets/{id}/comments": {acc: "authed", write: true, commentOK: true, min: rEditor, scoped: true, ok: 201, body: jb(map[string]any{"body": "hello"})},

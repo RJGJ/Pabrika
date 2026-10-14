@@ -181,6 +181,8 @@ func (s *Server) registerRoutes() {
 	s.registerLabelRoutes()
 	s.registerTicketRoutes()
 	s.registerCommentRoutes()
+	s.registerDecisionRoutes()
+	s.registerActivityRoutes()
 	s.registerEventRoutes()
 }
 

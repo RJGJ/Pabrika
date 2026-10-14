@@ -111,7 +111,7 @@ func (q *Queries) TicketCommentCounts(ctx context.Context, ticketIds []string) (
 }
 
 const ticketGet = `-- name: TicketGet :one
-SELECT id, project_id, number, title, description, status, priority, assignee_id, position, due_date, deleted_at, created_at, updated_at FROM tickets WHERE id = ? AND deleted_at IS NULL
+SELECT id, project_id, number, title, description, status, priority, assignee_id, position, due_date, deleted_at, created_at, updated_at, pr_url, branch, round_n, round_max FROM tickets WHERE id = ? AND deleted_at IS NULL
 `
 
 // A live (not soft-deleted) ticket by id.
@@ -132,8 +132,30 @@ func (q *Queries) TicketGet(ctx context.Context, id string) (Ticket, error) {
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrUrl,
+		&i.Branch,
+		&i.RoundN,
+		&i.RoundMax,
 	)
 	return i, err
+}
+
+const ticketHasLabelNamed = `-- name: TicketHasLabelNamed :one
+SELECT COUNT(*) FROM ticket_labels tl JOIN labels l ON l.id = tl.label_id
+WHERE tl.ticket_id = ? AND l.name = ?
+`
+
+type TicketHasLabelNamedParams struct {
+	TicketID string
+	Name     string
+}
+
+// 1 when the ticket currently carries a label with this name (names compare NOCASE).
+func (q *Queries) TicketHasLabelNamed(ctx context.Context, arg TicketHasLabelNamedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, ticketHasLabelNamed, arg.TicketID, arg.Name)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const ticketInsert = `-- name: TicketInsert :exec
@@ -188,6 +210,48 @@ func (q *Queries) TicketIsMember(ctx context.Context, arg TicketIsMemberParams) 
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const ticketLabelChangeRows = `-- name: TicketLabelChangeRows :many
+SELECT id, action, changes, created_at FROM ticket_activity
+WHERE ticket_id = ? AND instr(changes, '"labels"') > 0
+ORDER BY created_at, id
+`
+
+type TicketLabelChangeRowsRow struct {
+	ID        string
+	Action    string
+	Changes   string
+	CreatedAt string
+}
+
+// Activity rows that may carry a labels change, oldest first; the service parses the JSON.
+func (q *Queries) TicketLabelChangeRows(ctx context.Context, ticketID string) ([]TicketLabelChangeRowsRow, error) {
+	rows, err := q.db.QueryContext(ctx, ticketLabelChangeRows, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TicketLabelChangeRowsRow
+	for rows.Next() {
+		var i TicketLabelChangeRowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Action,
+			&i.Changes,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ticketLabelsForTickets = `-- name: TicketLabelsForTickets :many
@@ -340,7 +404,7 @@ func (q *Queries) TicketListColumn(ctx context.Context, arg TicketListColumnPara
 
 const ticketListPage = `-- name: TicketListPage :many
 SELECT t.id, t.project_id, t.number, t.title, t.status, t.priority, t.assignee_id, t.position,
-       t.due_date, t.created_at, t.updated_at,
+       t.due_date, t.created_at, t.updated_at, t.pr_url, t.branch, t.round_n, t.round_max,
        CAST(CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END AS INTEGER) AS status_rank
 FROM tickets t
 WHERE t.project_id = ?1 AND t.deleted_at IS NULL
@@ -412,6 +476,10 @@ type TicketListPageRow struct {
 	DueDate    *string
 	CreatedAt  string
 	UpdatedAt  string
+	PrUrl      *string
+	Branch     *string
+	RoundN     *int64
+	RoundMax   *int64
 	StatusRank int64
 }
 
@@ -465,6 +533,10 @@ func (q *Queries) TicketListPage(ctx context.Context, arg TicketListPageParams) 
 			&i.DueDate,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PrUrl,
+			&i.Branch,
+			&i.RoundN,
+			&i.RoundMax,
 			&i.StatusRank,
 		); err != nil {
 			return nil, err
@@ -507,7 +579,7 @@ func (q *Queries) TicketRemoveLabels(ctx context.Context, arg TicketRemoveLabels
 }
 
 const ticketSeedGetRaw = `-- name: TicketSeedGetRaw :one
-SELECT id, project_id, number, title, description, status, priority, assignee_id, position, due_date, deleted_at, created_at, updated_at FROM tickets WHERE id = ?
+SELECT id, project_id, number, title, description, status, priority, assignee_id, position, due_date, deleted_at, created_at, updated_at, pr_url, branch, round_n, round_max FROM tickets WHERE id = ?
 `
 
 // Test only: a ticket row including soft-deleted ones.
@@ -528,6 +600,10 @@ func (q *Queries) TicketSeedGetRaw(ctx context.Context, id string) (Ticket, erro
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrUrl,
+		&i.Branch,
+		&i.RoundN,
+		&i.RoundMax,
 	)
 	return i, err
 }
@@ -562,6 +638,22 @@ func (q *Queries) TicketSeedLabel(ctx context.Context, arg TicketSeedLabelParams
 	return i, err
 }
 
+const ticketSetLinks = `-- name: TicketSetLinks :exec
+UPDATE tickets SET pr_url = ?, branch = ? WHERE id = ?
+`
+
+type TicketSetLinksParams struct {
+	PrUrl  *string
+	Branch *string
+	ID     string
+}
+
+// Derived cache of the PR url and branch (parsed from the description). No updated_at bump.
+func (q *Queries) TicketSetLinks(ctx context.Context, arg TicketSetLinksParams) error {
+	_, err := q.db.ExecContext(ctx, ticketSetLinks, arg.PrUrl, arg.Branch, arg.ID)
+	return err
+}
+
 const ticketSetPosition = `-- name: TicketSetPosition :exec
 UPDATE tickets SET position = ? WHERE id = ?
 `
@@ -574,6 +666,22 @@ type TicketSetPositionParams struct {
 // Renumbering: position only, no updated_at bump.
 func (q *Queries) TicketSetPosition(ctx context.Context, arg TicketSetPositionParams) error {
 	_, err := q.db.ExecContext(ctx, ticketSetPosition, arg.Position, arg.ID)
+	return err
+}
+
+const ticketSetRound = `-- name: TicketSetRound :exec
+UPDATE tickets SET round_n = ?, round_max = ? WHERE id = ?
+`
+
+type TicketSetRoundParams struct {
+	RoundN   *int64
+	RoundMax *int64
+	ID       string
+}
+
+// Derived cache of the review round (parsed from the latest orchestrator bot comment).
+func (q *Queries) TicketSetRound(ctx context.Context, arg TicketSetRoundParams) error {
+	_, err := q.db.ExecContext(ctx, ticketSetRound, arg.RoundN, arg.RoundMax, arg.ID)
 	return err
 }
 

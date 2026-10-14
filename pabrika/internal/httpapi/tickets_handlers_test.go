@@ -115,9 +115,9 @@ func tkWant(t *testing.T, r *Resp, code int, errCode string) {
 
 var (
 	tkFullKeys = []string{"id", "ref", "project_id", "project_key", "number", "title", "description", "status",
-		"priority", "assignee", "labels", "position", "due_date", "comment_count", "created_at", "updated_at"}
+		"priority", "assignee", "labels", "position", "due_date", "comment_count", "workflow", "created_at", "updated_at"}
 	tkListKeys = []string{"id", "ref", "project_id", "project_key", "number", "title", "status",
-		"priority", "assignee", "labels", "position", "due_date", "comment_count", "created_at", "updated_at"}
+		"priority", "assignee", "labels", "position", "due_date", "comment_count", "workflow", "created_at", "updated_at"}
 )
 
 func TestTickets_Shapes(t *testing.T) {
@@ -570,7 +570,7 @@ func TestTickets_ChangeLabels(t *testing.T) {
 		t.Fatalf("swap: %d %s", r.Code, r.Body)
 	}
 	wantKeys(t, "ticket", r.JSON(t), "id", "project_id", "project_key", "number", "ref", "title", "description", "status",
-		"priority", "assignee", "labels", "position", "due_date", "comment_count", "created_at", "updated_at")
+		"priority", "assignee", "labels", "position", "due_date", "comment_count", "workflow", "created_at", "updated_at")
 
 	tkFieldErr(t, w.h.Do(t, "PATCH", path, map[string]any{}, As(w.editor)), "add")
 	tkFieldErr(t, w.h.Do(t, "PATCH", path, map[string]any{"add": []string{foreign}}, As(w.editor)), "add")

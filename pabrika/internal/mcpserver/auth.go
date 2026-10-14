@@ -123,8 +123,8 @@ func normalizeOrigin(v string) (string, bool) {
 	return scheme + "://" + host, true
 }
 
-// toolsFor returns the tools a principal may see: a read token the 5 read tools, a comment
-// token those plus add_comment and update_comment (7), a write token all 16. Fail closed: an
+// toolsFor returns the tools a principal may see: a read token the 7 read tools, a comment
+// token those plus add_comment and update_comment (9), a write token all 18. Fail closed: an
 // unknown scope, or no token at all, sees the read tools only. The service enforces scope
 // again on every write.
 func toolsFor(p auth.Principal) []*toolDef {

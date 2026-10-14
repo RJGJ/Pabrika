@@ -50,13 +50,14 @@ func (d *toolDef) mcpTool() *mcp.Tool {
 	return &mcp.Tool{Name: d.name, Title: d.title, Description: d.desc, InputSchema: d.schema, Annotations: ann}
 }
 
-// allTools is the full surface: 5 read tools, then 2 comment-scope tools and 9 write-scope tools (16).
+// allTools is the full surface: 7 read tools, then 2 comment-scope tools and 9 write-scope tools (18).
 var allTools = buildTools()
 
 func buildTools() []*toolDef {
 	var defs []*toolDef
 	defs = append(defs, projectTools()...)
 	defs = append(defs, ticketReadTools()...)
+	defs = append(defs, decisionReadTools()...)
 	defs = append(defs, writeProjectTools()...)
 	defs = append(defs, ticketWriteTools()...)
 	defs = append(defs, commentTools()...)
