@@ -95,6 +95,29 @@ go run ./cmd/pabrika version
 - Go's `flag` stops at the first positional argument: `reset-password --password-stdin EMAIL`, not `EMAIL --password-stdin`.
 - On Windows use Git Bash; paths like `/data` may need `MSYS_NO_PATHCONV=1` for Docker commands.
 
+## Agent workflow
+
+Command lines for the agent roles (same text as root `AGENTS.md`). Run from the worktree root; paths are repo-root relative.
+
+```text
+Build web: cd pabrika/web && bun install --frozen-lockfile && bun run build
+Build Go: cd pabrika && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=dev" -o pabrika ./cmd/pabrika
+Test Go: cd pabrika && CGO_ENABLED=0 go test ./...
+Lint Go: cd pabrika && go vet ./...
+Test web: cd pabrika/web && bun run test
+Typecheck web: cd pabrika/web && bun run typecheck
+Gates (all must pass before READY): Build web, Test Go, Lint Go, Test web, Typecheck web
+E2E: cd pabrika/web && bun install --frozen-lockfile && bun run build && cd ../e2e && bun install --frozen-lockfile && bun x playwright test
+Branch: pabrika/<TICKET-REF>-<slug>   Worktree: ../wt-<TICKET-REF>   Base: see board project description
+Secrets: never read .env or deploy/ env files; never put tokens in tickets, comments, files or PRs
+```
+
+- Slug: lower-case ASCII and hyphens, max 40 characters. Example branch: `pabrika/PAB-12-csv-export`.
+- Create a worktree: `git worktree add ../wt-PAB-12 -b pabrika/PAB-12-csv-export origin/<Base>`. Remove it after merge or close: `git worktree remove ../wt-PAB-12` (never `--force`; if it refuses, post `BLOCKED:`).
+- Only the Orchestrator creates and removes worktrees.
+- Never push to `Base:` or to a branch the agent did not create; never force-push.
+- Each worktree needs its own dependency install (`cd pabrika/web && bun install --frozen-lockfile`).
+
 ## Specs and plans
 
 - `specs/main-spec.md` is the source of truth for what is built.
