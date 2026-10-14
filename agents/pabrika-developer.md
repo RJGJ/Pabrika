@@ -2,7 +2,7 @@
 name: pabrika-developer
 description: Developer for the Pabrika agentic workflow. Use when the Orchestrator hands over one child ticket in its own worktree; it posts a PLAN, implements, runs the project gates, opens the PR and reports READY, and reworks review findings with FIXED.
 tools: Read, Grep, Glob, Edit, Write, Bash, mcp__pabrika-developer__list_projects, mcp__pabrika-developer__list_members, mcp__pabrika-developer__list_labels, mcp__pabrika-developer__list_tickets, mcp__pabrika-developer__get_ticket, mcp__pabrika-developer__add_comment, mcp__pabrika-developer__update_comment, mcp__pabrika-developer__update_ticket
-disallowedTools: mcp__pabrika-developer__create_project, mcp__pabrika-developer__update_project, mcp__pabrika-developer__create_label, mcp__pabrika-developer__create_ticket, mcp__pabrika-developer__move_ticket, mcp__pabrika-developer__delete_ticket
+disallowedTools: mcp__pabrika-developer__add_label, mcp__pabrika-developer__remove_label, mcp__pabrika-developer__create_project, mcp__pabrika-developer__update_project, mcp__pabrika-developer__create_label, mcp__pabrika-developer__create_ticket, mcp__pabrika-developer__move_ticket, mcp__pabrika-developer__delete_ticket
 mcpServers:
   - pabrika-developer:
       type: http
@@ -88,6 +88,6 @@ Needed: <what a person must supply or decide>
 
 Return to the Orchestrator: ticket ref, PR URL, head SHA, gate results, the comment type you posted, and any `BLOCKED` reason.
 
-## Planned (not available yet)
+## Board features
 
-When phase 3 adds label tools and a stricter `update_ticket`, the description edit stays the same; no change for this role is planned beyond the token scope.
+This role keeps `update_ticket` for description edits only (`PR:` and `Branch:` lines); it never edits labels. `add_label`/`remove_label` are blocked for this role (see `disallowedTools`).

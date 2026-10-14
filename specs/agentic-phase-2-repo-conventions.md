@@ -107,9 +107,9 @@ Playwright is not in the repo, so this task adds it. **Proposal:** put it in a s
 
 Files to create:
 
-1. `pabrika/e2e/package.json`: private, `"type": "module"`, scripts `"test": "playwright test"`, `"install-browsers": "playwright install chromium"`; devDependency `@playwright/test` pinned to an exact version (same exact-pin style as `web/package.json`; version chosen at implementation time).
+1. `pabrika/e2e/package.json`: private, `"type": "module"`, scripts `"test": "playwright test"`; devDependency `@playwright/test` pinned to an exact version (same exact-pin style as `web/package.json`; version chosen at implementation time).
 2. `pabrika/e2e/playwright.config.ts`: sketch.
-   - `testDir: '.'`, `testMatch: '*.spec.ts'`, `workers: 1`, `retries: 0`, `use.baseURL: 'http://localhost:8080'`, project `chromium` only.
+   - `testDir: '.'`, `testMatch: '*.spec.ts'`, `workers: 1`, `retries: 0`, `use.baseURL: 'http://localhost:8080'`, project `Edge` only.
    - `webServer`: command `go run ./cmd/pabrika serve` with `cwd: '..'`, `url: 'http://localhost:8080/healthz'`, `reuseExistingServer: false`, `env`: `COOKIE_SECURE=false`, `BASE_URL=http://localhost:8080`, `DB_PATH` set to a temp file under `e2e/.tmp/` (gitignored), `ALLOW_SIGNUP=true`. Starting with a fresh DB each run keeps tests independent. The web bundle must already be built (Pabrika serves it embedded; without it the server answers 503), so the `E2E:` line below builds first.
 3. `pabrika/e2e/smoke.spec.ts`: one test titled `AC0: server serves the sign-in page` that opens `/login` and expects the page to load. Purpose: prove the setup works before any feature spec exists. File naming for real tests stays `<TICKET-REF>.spec.ts`, test titles begin with the AC id (workflow 7).
 4. `pabrika/e2e/README.md`: three lines: install, run, where tests go. (**Proposal**; the only doc file in this task.)
@@ -120,7 +120,7 @@ Test users: tests create users through signup (enabled by `ALLOW_SIGNUP=true` in
 The `E2E:` line (exact text, goes into `AGENTS.md` and `pabrika/CLAUDE.md`, see Task 5):
 
 ```text
-E2E: cd pabrika/web && bun install --frozen-lockfile && bun run build && cd ../e2e && bun install --frozen-lockfile && bunx playwright install chromium && bunx playwright test
+E2E: cd pabrika/web && bun install --frozen-lockfile && bun run build && cd ../e2e && bun install --frozen-lockfile && bun x playwright test
 ```
 
 (Per-run output is the Playwright list reporter; failing test names appear as `AC<n>: ...`. Run from the worktree root.)
@@ -139,7 +139,7 @@ Lint Go: cd pabrika && go vet ./...
 Test web: cd pabrika/web && bun run test
 Typecheck web: cd pabrika/web && bun run typecheck
 Gates (all must pass before READY): Build web, Test Go, Lint Go, Test web, Typecheck web
-E2E: cd pabrika/web && bun install --frozen-lockfile && bun run build && cd ../e2e && bun install --frozen-lockfile && bunx playwright install chromium && bunx playwright test
+E2E: cd pabrika/web && bun install --frozen-lockfile && bun run build && cd ../e2e && bun install --frozen-lockfile && bun x playwright test
 Branch: pabrika/<TICKET-REF>-<slug>   Worktree: ../wt-<TICKET-REF>   Base: see board project description
 Secrets: never read .env or deploy/ env files; never put tokens in tickets, comments, files or PRs
 ```
@@ -198,7 +198,7 @@ Put this checklist in the Pabrika repo as `pabrika/docs/agentic-onboarding.md` *
 - `requirements/TEMPLATE.md` structure, header block and the Reviewer-enforced validation rule.
 - PR template wording and the "no AC list is a finding" rule.
 - Slug rule (lower-case ASCII, max 40) and `git worktree remove` without `--force`.
-- Playwright in a separate `pabrika/e2e/` package, chromium only, one worker, fresh temp DB per run, one `AC0` smoke test.
+- Playwright in a separate `pabrika/e2e/` package, Microsoft Edge only (`channel: 'msedge'`, no browser download), one worker, fresh temp DB per run, one `AC0` smoke test.
 - The exact `E2E:` line and the gate list ("Gates" line).
 - Project key `PAB` and the `Repo: D:\rj\Pabrika` / `Base: dev` text.
 - No CI in this phase.
@@ -210,5 +210,5 @@ Put this checklist in the Pabrika repo as `pabrika/docs/agentic-onboarding.md` *
 3. Per-role tokens: one board user per role, or one shared bot user with five tokens? The token list assumes tokens can be created per user with a project limit; the app does allow one user up to 100 active named tokens (checked in the code), but each token acts with its owner's role, so five tokens on one human's account inherit that human's permissions; separate bot users limit that. Decide which. Ties to workflow open question 3 and phase 1.
 4. Should the onboarding checklist be a committed doc (`pabrika/docs/agentic-onboarding.md`) or stay only in this spec?
 5. Add CI (GitHub Actions running the Gates line) so "CI results are preferred" (workflow 8.3) holds? Not in this phase unless the user says so.
-6. May Playwright and a Chromium download be added to the repo's dev dependencies (supply-chain and size cost)? Required for the QA role either way.
+6. May Playwright be added to the repo's dev dependencies (supply-chain and size cost; it uses the installed Edge, no browser download)? Required for the QA role either way.
 7. Should the requirements file merge with the Researcher's own PR after Gate 1 or with the first child PR? Workflow open question 4; this phase's template works with both.

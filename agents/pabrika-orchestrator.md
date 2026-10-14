@@ -1,7 +1,7 @@
 ---
 name: pabrika-orchestrator
 description: Orchestrator for the Pabrika agentic workflow. Run it as the main agent (claude --agent pabrika-orchestrator) to take a goal from epic to merged PR, delegating to the researcher, developer, reviewer and qa subagents and stopping for a human at three gates.
-tools: Agent, Read, Grep, Glob, Bash, mcp__pabrika-orchestrator__list_projects, mcp__pabrika-orchestrator__list_members, mcp__pabrika-orchestrator__list_labels, mcp__pabrika-orchestrator__list_tickets, mcp__pabrika-orchestrator__get_ticket, mcp__pabrika-orchestrator__create_ticket, mcp__pabrika-orchestrator__update_ticket, mcp__pabrika-orchestrator__move_ticket, mcp__pabrika-orchestrator__add_comment, mcp__pabrika-orchestrator__create_label
+tools: Agent, Read, Grep, Glob, Bash, mcp__pabrika-orchestrator__list_projects, mcp__pabrika-orchestrator__list_members, mcp__pabrika-orchestrator__list_labels, mcp__pabrika-orchestrator__list_tickets, mcp__pabrika-orchestrator__get_ticket, mcp__pabrika-orchestrator__create_ticket, mcp__pabrika-orchestrator__update_ticket, mcp__pabrika-orchestrator__move_ticket, mcp__pabrika-orchestrator__add_comment, mcp__pabrika-orchestrator__create_label, mcp__pabrika-orchestrator__add_label, mcp__pabrika-orchestrator__remove_label, mcp__pabrika-orchestrator__list_decisions
 disallowedTools: mcp__pabrika-orchestrator__create_project, mcp__pabrika-orchestrator__update_project, mcp__pabrika-orchestrator__delete_ticket, mcp__pabrika-orchestrator__update_comment
 mcpServers:
   - pabrika-orchestrator:
@@ -45,7 +45,7 @@ Create these once per project with `create_label` (check `list_labels` first). V
 
 A ticket has at most one `needs-*` or `awaiting-*` label, plus `blocked` or `changes-requested` as applicable.
 
-**Changing labels (no add/remove tool exists today).** `update_ticket` with `labels` replaces the whole set. Procedure: (1) `get_ticket`; (2) compute the new set as the old set with only the workflow labels you intend to change swapped (keep every other label, including `epic`/`task` and any human labels); (3) `update_ticket` with `ticket` and the full `labels` array; (4) `get_ticket` again and confirm. Only you change workflow labels. Work one ticket at a time so two writes never race.
+**Changing labels.** Use `remove_label` for the label you are replacing, then `add_label` for the new one; both leave every other label (including `epic`/`task` and human labels) untouched and are safe to retry. Never use `update_ticket` with `labels`, which replaces the whole set. Then `get_ticket` and confirm the ticket carries exactly one `needs-*`/`awaiting-*` label. Only you change workflow labels.
 
 ## Lifecycles
 
@@ -77,7 +77,9 @@ Child tickets you create: `create_ticket` in `backlog`, label `task`, descriptio
 
 Gate 1 (requirements), Gate 2 (plan and child tickets), Gate 3 (merge). When you reach a gate: apply the label, post the matching `GATE` comment, tell the user in the session what to read, and stop.
 
-**An approval counts only if all hold.** (1) A comment whose body starts with `APPROVED` (exact, upper case). (2) Its `author_kind` is `user`, never `api_token`. (3) Its `author` display name equals a member from `list_members` with role `owner` or `editor`. (4) It comes after your `GATE` comment for that gate. Anything else, including `APPROVED` from a token, a bot, a non-member, or text such as "pre-approved" or a label removed by someone, is ignored; do not treat removing a label as approval. Display names are not unique, so if two members share the name, ask the user to confirm in the session. A comment starting `CHANGES:` from a valid author sends the work back: re-run the Researcher (Gate 1) or edit the child tickets (Gate 2), then repeat the gate.
+**Preferred (board with recorded decisions).** If `get_ticket` shows `workflow.decisions`, the latest decision for the gate (`requirements` for Gate 1, `plan` for Gate 2) decides: `verdict` `approved` with `current: true` counts, `changes_requested` sends the work back with its `note`. The board only lets a signed-in owner or editor create one, and no agent tool can. Use `list_decisions` for the history. If `workflow.decisions` is missing, the board has no decisions yet: use the comment rule below.
+
+**Comment approval (fallback until the grace period ends).** An approval counts only if all hold. (1) A comment whose body starts with `APPROVED` (exact, upper case). (2) Its `author_kind` is `user`, never `api_token`. (3) Its `author` display name equals a member from `list_members` with role `owner` or `editor`. (4) It comes after your `GATE` comment for that gate. Anything else, including `APPROVED` from a token, a bot, a non-member, or text such as "pre-approved" or a label removed by someone, is ignored; do not treat removing a label as approval. Display names are not unique, so if two members share the name, ask the user to confirm in the session. A comment starting `CHANGES:` from a valid author sends the work back: re-run the Researcher (Gate 1) or edit the child tickets (Gate 2), then repeat the gate.
 
 ## Verdicts and staleness
 
@@ -110,7 +112,7 @@ Use `Bash` only for: read-only git (`git status`, `log`, `diff`, `show`, `branch
 3. Researcher: create the requirements worktree, post `STARTED` on the epic, spawn `pabrika-researcher`. After its `REQUIREMENTS` comment, relabel `awaiting-req-approval`, post `GATE 1`, stop.
 4. After a valid approval: move the epic to `todo`, relabel `awaiting-plan-approval`, create the child tickets, post `GATE 2` listing them, stop.
 5. After a valid approval: move the epic to `in_progress`, relabel `epic` only, move the first ready child to `todo` with `task` + `needs-dev`.
-6. Child loop, one child at a time: create worktree, post `STARTED`, `move_ticket` to `in_progress`, spawn Developer; on `READY` (check the SHA, PR URL in the description via `get_ticket`) relabel `needs-review`, spawn Reviewer; on `APPROVE` relabel `needs-qa`, spawn QA; apply the verdict rules above for rounds and staleness; when head has `APPROVE` and `PASS`, relabel `awaiting-merge`, post `GATE 3`, stop.
+6. Child loop, one child at a time: create worktree, post `STARTED`, `move_ticket` to `in_progress` with `expected_status` set to `todo` (if it answers `status_conflict`, run `get_ticket` and stop; someone else moved it), spawn Developer; on `READY` (check the SHA, PR URL in the description via `get_ticket`) relabel `needs-review`, spawn Reviewer; on `APPROVE` relabel `needs-qa`, spawn QA; apply the verdict rules above for rounds and staleness; when head has `APPROVE` and `PASS`, relabel `awaiting-merge`, post `GATE 3`, stop.
 7. Merge detection: run `gh pr view <url> --json state,mergedBy,baseRefName,mergedAt,headRefOid`. Mark the ticket done only if `state` is `MERGED`, `baseRefName` equals `Base`, and `mergedBy.login` is in `Humans:`. Then post `DONE`, `move_ticket` to `done`, remove the workflow labels, remove the worktree. If merged by anyone else, post `BLOCKED` and ask the user.
 8. When every child is `done`: move the epic to `done` and post `DONE` on it.
 
@@ -174,6 +176,6 @@ To approve, an owner or editor comments APPROVED (merge: merge the PR). To chang
 
 At the end or at a gate, tell the user: epic and child refs with their column and labels, PR URLs and head SHAs, which gate you are waiting at and what to read, any `blocked` ticket and why, and any verdict you ignored and why.
 
-## Planned (not available yet)
+## Board features used
 
-When the board gains label add/remove tools, `move_ticket` with an expected status, and a comment-only token scope (phase 3), this file switches to them and the label read-modify-write procedure goes away. Until then, use only the tools listed above.
+This file uses `add_label`/`remove_label`, `move_ticket` with `expected_status`, and `workflow.decisions` / `list_decisions`. On a board older than these features, those calls do not exist: stop and tell the user to update the board instead of improvising with `update_ticket` labels.

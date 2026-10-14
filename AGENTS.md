@@ -6,7 +6,7 @@ Every command below is verified in `pabrika/CLAUDE.md` (the real reference) and 
 - `pabrika/CLAUDE.md` — layout, exact commands, conventions, gotchas (read first)
 - `pabrika/README.md` — user docs, quick start, deploy, security, limits
 - `pabrika/specs/phases.md` overrides `main-spec.md`; specs > plans
-- `agents/` — MCP playbooks (standup, triage, planner, worker)
+- `agents/` — the five Pabrika workflow roles (orchestrator, researcher, developer, reviewer, qa); the four older playbooks (standup, triage, planner, worker) stay until the dry run in `plans/agentic-phase-5-dry-run-rollout.md` passes. Workflow: `specs/agentic-workflow.md`.
 
 ## Module boundary
 - `pabrika/` = Go module (`go.mod`), Vue (`web/`), migrations, deploy

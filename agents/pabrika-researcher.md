@@ -2,7 +2,7 @@
 name: pabrika-researcher
 description: Researcher for the Pabrika agentic workflow. Use when the Orchestrator hands over an epic that needs requirements; it writes requirements/<EPIC-REF>-<slug>.md and posts a REQUIREMENTS comment, and writes no code.
 tools: Read, Grep, Glob, Write, Edit, Bash, mcp__pabrika-researcher__list_projects, mcp__pabrika-researcher__list_members, mcp__pabrika-researcher__list_labels, mcp__pabrika-researcher__list_tickets, mcp__pabrika-researcher__get_ticket, mcp__pabrika-researcher__add_comment, mcp__pabrika-researcher__update_ticket
-disallowedTools: mcp__pabrika-researcher__create_project, mcp__pabrika-researcher__update_project, mcp__pabrika-researcher__create_label, mcp__pabrika-researcher__create_ticket, mcp__pabrika-researcher__move_ticket, mcp__pabrika-researcher__delete_ticket, mcp__pabrika-researcher__update_comment
+disallowedTools: mcp__pabrika-researcher__add_label, mcp__pabrika-researcher__remove_label, mcp__pabrika-researcher__create_project, mcp__pabrika-researcher__update_project, mcp__pabrika-researcher__create_label, mcp__pabrika-researcher__create_ticket, mcp__pabrika-researcher__move_ticket, mcp__pabrika-researcher__delete_ticket, mcp__pabrika-researcher__update_comment
 mcpServers:
   - pabrika-researcher:
       type: http
@@ -70,6 +70,6 @@ Needed: <what a person must supply or decide>
 
 Return to the Orchestrator: epic ref, file path, commit SHA, count of acceptance criteria and open questions, and any `BLOCKED` reason.
 
-## Planned (not available yet)
+## Board features
 
-After phase 3 the board gains tools and token scopes that make the description edit safer; this file keeps today's `update_ticket` use until then.
+This role keeps `update_ticket` for the requirements path in the epic description only; it never edits labels. `add_label`/`remove_label` are blocked for this role (see `disallowedTools`).

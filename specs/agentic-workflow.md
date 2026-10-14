@@ -166,7 +166,7 @@ Tags: `[orchestrator]`, `[researcher]`, `[developer]`, `[reviewer]`, `[qa]`. Sec
 
 | Role | Types |
 |---|---|
-| orchestrator | `STARTED`, `ROUND n/N`, `BLOCKED`, `DONE` |
+| orchestrator | `STARTED`, `GATE n` for n = 1, 2 or 3 (marks when a person's approval is awaited; an `APPROVED` only counts if it comes after it), `ROUND n/N`, `BLOCKED`, `DONE` |
 | researcher | `REQUIREMENTS` (summary, path) |
 | developer | `PLAN`, `READY` (PR url, gates run, how to verify), `FIXED` (what addressed which finding), `BLOCKED` |
 | reviewer | `APPROVE`, `CHANGES REQUESTED` (numbered findings) |
@@ -188,7 +188,7 @@ Required fields before a transition:
 | to `needs-qa` | `APPROVE` comment for the same commit SHA as `READY` or `FIXED` |
 | to `awaiting-merge` | `PASS` comment for the PR's current head SHA |
 
-If the head SHA changes after a verdict, earlier verdicts for the older SHA are void and the ticket re-enters review. (Proposal, prevents stale approvals.)
+If the head SHA changes after a verdict, earlier verdicts for the older SHA are void and the ticket re-enters review. (Proposal, prevents stale approvals.) The QA Tester's own test commit changes the head SHA, so the Orchestrator re-runs review whenever the head has no matching `APPROVE` and `PASS`; this is accepted as safe over fast (decided in the rollout review).
 
 ## 7. Repository conventions
 

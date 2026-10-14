@@ -139,7 +139,7 @@ Before relying on the roles, run the checks H1 to H8 and the five smoke tests fr
 ## Known limits
 
 - **No atomic claim.** The Orchestrator runs one ticket at a time per project; never run two Orchestrators on one project.
-- **Label writes race.** There is no add or remove label tool yet; only the Orchestrator changes labels, by read-modify-write. Phase 3 adds the tools; adoption in these files is planned for phase 5.
+- **Label writes.** The Orchestrator uses `add_label`/`remove_label`, which never touch other labels. Other roles are blocked from them by `disallowedTools`; a `write` token held by Developer or Researcher could still call them, so keep their tokens on a bot user with the editor role.
 - **Comment size.** The board returns comment bodies cut at 8,000 characters and the latest 50 comments per ticket, so the role files keep comments short and put the SHA near the top.
 - **Fixed states.** Tickets move between Backlog, To do, In progress and Done; sub-stages are labels.
 - Other gaps: see section 11 of the workflow spec.

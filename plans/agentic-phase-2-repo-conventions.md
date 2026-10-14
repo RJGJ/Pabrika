@@ -30,7 +30,7 @@ Basis: `specs/agentic-phase-2-repo-conventions.md` (scope source), `specs/agenti
 
 ### A3: Playwright package (opencode for files, main agent picks the version, M)
 - Files: `pabrika/e2e/package.json`, `pabrika/e2e/playwright.config.ts`, `pabrika/e2e/smoke.spec.ts`, `pabrika/e2e/README.md`, generated `pabrika/e2e/bun.lock`.
-- Change: per spec Task 4. `package.json` private, `"type": "module"`, scripts `test` and `install-browsers`, `@playwright/test` pinned to an exact version (main agent chooses the version at implementation time; check it is at least 2 weeks old and matches the style of `web/package.json`). Config: chromium only, `workers: 1`, `retries: 0`, `webServer` runs `go run ./cmd/pabrika serve` with `cwd: '..'`, healthcheck URL `http://localhost:8080/healthz`, env `COOKIE_SECURE=false`, `BASE_URL=http://localhost:8080`, `ALLOW_SIGNUP=true`, `DB_PATH` under `e2e/.tmp/`. Smoke test titled `AC0: server serves the sign-in page` opening `/login`. README three lines (install, run, where tests go).
+- Change: per spec Task 4. `package.json` private, `"type": "module"`, script `test`, `@playwright/test` pinned to an exact version (main agent chooses the version at implementation time; check it is at least 2 weeks old and matches the style of `web/package.json`). Config: Microsoft Edge only (`channel: 'msedge'`, no browser download), `workers: 1`, `retries: 0`, `webServer` runs `go run ./cmd/pabrika serve` with `cwd: '..'`, healthcheck URL `http://localhost:8080/healthz`, env `COOKIE_SECURE=false`, `BASE_URL=http://localhost:8080`, `ALLOW_SIGNUP=true`, `DB_PATH` under `e2e/.tmp/`. Smoke test titled `AC0: server serves the sign-in page` opening `/login`. README three lines (install, run, where tests go).
 - Verify: `cd pabrika/e2e && bun install` creates `bun.lock`; `bunx tsc --noEmit` is optional; full run is verified in step B2.
 - Note: write a short `test password` rule into README only (generated per run, never committed).
 
@@ -96,7 +96,7 @@ Total: about one session for the repo work, about 30 to 45 minutes of user time.
 
 ## Risks
 
-1. Playwright and a Chromium download add supply-chain and size cost (spec open question 6); mitigated by a separate package, exact pin, no change to `web/` lockfile.
+1. Playwright adds supply-chain and size cost (no browser download: it uses the installed Edge) (spec open question 6); mitigated by a separate package, exact pin, no change to `web/` lockfile.
 2. Port 8080 or leftover `e2e/.tmp` DB makes the smoke test flaky; config forces a fresh DB path and `reuseExistingServer: false`.
 3. The `E2E:` line depends on a built web bundle (without it the server returns 503); the line builds first. It also needs `go` on PATH inside the Playwright webServer.
 4. Windows (Git Bash) quirks: path conversion, `cd` chains, worktree paths outside the repo (`D:\rj\wt-*`). B1 and B2 run on the real environment.
