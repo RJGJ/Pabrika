@@ -1,5 +1,6 @@
 import type { Label, Member, Priority, TicketSummary } from '@/api/types'
 import { PRIORITIES } from '@/api/types'
+import { needsAttention } from '@/lib/workflow'
 
 export interface BoardFilters {
   q: string
@@ -7,11 +8,13 @@ export interface BoardFilters {
   /** 'me', 'none' (unassigned) or a user id; null means anyone. */
   assignee: string | null
   label: string[]
+  /** Only tickets waiting on a person: an `awaiting-*` gate or `blocked`. */
+  attention: boolean
 }
 
-export const emptyFilters = (): BoardFilters => ({ q: '', priority: [], assignee: null, label: [] })
+export const emptyFilters = (): BoardFilters => ({ q: '', priority: [], assignee: null, label: [], attention: false })
 
-export const FILTER_KEYS = ['q', 'priority', 'assignee', 'label'] as const
+export const FILTER_KEYS = ['q', 'priority', 'assignee', 'label', 'attention'] as const
 
 type QueryValue = string | null | undefined | (string | null)[]
 export type QueryLike = Record<string, QueryValue>
@@ -41,7 +44,7 @@ export function parseFilters(
     const ids = new Set(known.labels.map((l) => l.id))
     label = label.filter((id) => ids.has(id))
   }
-  return { q: first(query.q).trim(), priority, assignee, label }
+  return { q: first(query.q).trim(), priority, assignee, label, attention: first(query.attention).trim() === '1' }
 }
 
 /** Query entries for the active filters only (inactive keys are absent so they can be removed from the URL). */
@@ -51,11 +54,12 @@ export function serializeFilters(f: BoardFilters): Partial<Record<(typeof FILTER
   if (f.priority.length) out.priority = f.priority.join(',')
   if (f.assignee) out.assignee = f.assignee
   if (f.label.length) out.label = f.label.join(',')
+  if (f.attention) out.attention = '1'
   return out
 }
 
 export function filtersActive(f: BoardFilters): boolean {
-  return !!f.q || f.priority.length > 0 || !!f.assignee || f.label.length > 0
+  return !!f.q || f.priority.length > 0 || !!f.assignee || f.label.length > 0 || f.attention
 }
 
 export function matchesFilters(t: TicketSummary, f: BoardFilters, meId: string | null): boolean {
@@ -73,5 +77,6 @@ export function matchesFilters(t: TicketSummary, f: BoardFilters, meId: string |
     }
   }
   if (f.label.length && !t.labels.some((l) => f.label.includes(l.id))) return false
+  if (f.attention && !needsAttention(t.labels)) return false
   return true
 }

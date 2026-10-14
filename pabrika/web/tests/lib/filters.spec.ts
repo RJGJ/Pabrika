@@ -12,7 +12,7 @@ const known = {
 describe('parseFilters', () => {
   it('reads all keys', () => {
     const f = parseFilters({ q: ' fix ', priority: 'high,urgent', assignee: 'u1', label: 'l1,l2' }, known)
-    expect(f).toEqual({ q: 'fix', priority: ['high', 'urgent'], assignee: 'u1', label: ['l1', 'l2'] })
+    expect(f).toEqual({ q: 'fix', priority: ['high', 'urgent'], assignee: 'u1', label: ['l1', 'l2'], attention: false })
   })
   it('ignores unknown values', () => {
     const f = parseFilters({ priority: 'high,bogus', assignee: 'ghost', label: 'l1,nope' }, known)
@@ -27,7 +27,8 @@ describe('parseFilters', () => {
   })
   it('round-trips through serializeFilters and omits inactive keys', () => {
     expect(serializeFilters(emptyFilters())).toEqual({})
-    const f = { q: 'a', priority: ['low' as const], assignee: 'me', label: ['l1'] }
+    const f = { q: 'a', priority: ['low' as const], assignee: 'me', label: ['l1'], attention: true }
+    expect(serializeFilters(f).attention).toBe('1')
     expect(parseFilters(serializeFilters(f), known)).toEqual(f)
   })
 })
@@ -59,5 +60,26 @@ describe('matchesFilters', () => {
   it('filtersActive', () => {
     expect(filtersActive(emptyFilters())).toBe(false)
     expect(filtersActive({ ...emptyFilters(), q: 'x' })).toBe(true)
+  })
+})
+
+describe('attention filter', () => {
+  const lab = (name: string) => ({ id: name, project_id: 'p', name, color: 'gray' })
+  const on = { ...emptyFilters(), attention: true }
+  it('parses ?attention=1 only', () => {
+    expect(parseFilters({ attention: '1' }).attention).toBe(true)
+    expect(parseFilters({ attention: 'true' }).attention).toBe(false)
+    expect(parseFilters({}).attention).toBe(false)
+  })
+  it('is an active filter', () => {
+    expect(filtersActive(on)).toBe(true)
+  })
+  it('keeps gate and blocked tickets only', () => {
+    expect(matchesFilters(t({ labels: [lab('awaiting-plan-approval')] }), on, null)).toBe(true)
+    expect(matchesFilters(t({ labels: [lab('awaiting-merge')] }), on, null)).toBe(true)
+    expect(matchesFilters(t({ labels: [lab('blocked')] }), on, null)).toBe(true)
+    expect(matchesFilters(t({ labels: [lab('needs-review')] }), on, null)).toBe(false)
+    expect(matchesFilters(t({ labels: [] }), on, null)).toBe(false)
+    expect(matchesFilters(t({ labels: [] }), emptyFilters(), null)).toBe(true)
   })
 })

@@ -57,3 +57,39 @@ describe('CommentList controls', () => {
     expect(w.text()).toContain('edited')
   })
 })
+
+describe('CommentList role tags', () => {
+  const tagged = (author: Comment['author'], body: string): Comment => ({ ...bot, id: 'c-tag', author, body })
+
+  it('shows role and type chips for a bot and strips the tag line', () => {
+    const w = render({})
+    w.unmount()
+    const c = tagged(bot.author, '[reviewer] CHANGES REQUESTED\nfix the thing')
+    const m = mount(CommentList, { props: { comments: [c], canEdit: true, isOwner: false, meId: 'u-me' }, attachTo: document.body })
+    const row = m.get('[data-comment-id="c-tag"]')
+    expect(row.text().toLowerCase()).toContain('bot')
+    expect(row.get('[data-testid=role-chip]').text()).toBe('Reviewer')
+    const type = row.get('[data-testid=type-chip]')
+    expect(type.text()).toBe('Changes requested')
+    expect(type.attributes('data-tone')).toBe('orange')
+    expect(row.text()).toContain('fix the thing')
+    expect(row.text()).not.toContain('[reviewer]')
+    m.unmount()
+  })
+
+  it('shows no chips for a human with the same text', () => {
+    const c = tagged(mine.author, '[reviewer] CHANGES REQUESTED\nbody')
+    const m = mount(CommentList, { props: { comments: [c], canEdit: true, isOwner: false, meId: 'u-me' }, attachTo: document.body })
+    expect(m.find('[data-testid=role-chip]').exists()).toBe(false)
+    expect(m.find('[data-testid=type-chip]').exists()).toBe(false)
+    expect(m.text()).toContain('[reviewer] CHANGES REQUESTED')
+    m.unmount()
+  })
+
+  it('a bot comment without a tag keeps the plain bot badge', () => {
+    const m = mount(CommentList, { props: { comments: [bot], canEdit: true, isOwner: false, meId: 'u-me' }, attachTo: document.body })
+    expect(m.find('[data-testid=role-chip]').exists()).toBe(false)
+    expect(m.text()).toContain('Investigating.')
+    m.unmount()
+  })
+})

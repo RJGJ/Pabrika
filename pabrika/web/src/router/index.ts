@@ -21,6 +21,7 @@ export const routes = [
   // the panel opens or closes: no board reload, no new stream. Do not key the RouterView by route.
   { path: '/p/:key', name: 'board', component: BoardView },
   { path: '/p/:key/t/:number', name: 'ticket', component: BoardView },
+  { path: '/p/:key/activity', name: 'project-activity', component: () => import('@/views/ProjectActivityView.vue') },
   { path: '/p/:key/settings', name: 'project-settings', component: () => import('@/views/ProjectSettingsView.vue') },
   { path: '/settings', name: 'account', component: () => import('@/views/AccountSettingsView.vue') },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFoundView.vue') },

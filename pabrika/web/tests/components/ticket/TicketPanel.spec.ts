@@ -9,10 +9,12 @@ vi.mock('@/api/tickets', () => ({
 vi.mock('@/api/comments', () => ({
   comments: { listAll: vi.fn(), add: vi.fn(), update: vi.fn(), remove: vi.fn(), activity: vi.fn() },
 }))
+vi.mock('@/api/decisions', () => ({ decisions: { create: vi.fn(), list: vi.fn() } }))
 vi.mock('@/lib/toast', () => ({ notify: vi.fn() }))
 
 import { ApiError } from '@/api/client'
 import { comments as commentsApi } from '@/api/comments'
+import { decisions as decisionsApi } from '@/api/decisions'
 import { tickets as ticketsApi } from '@/api/tickets'
 import { SheetContent } from '@/components/ui/sheet'
 import StatusSelect from '@/components/ticket/StatusSelect.vue'
@@ -20,10 +22,14 @@ import TicketPanel from '@/components/ticket/TicketPanel.vue'
 import { useAuthStore } from '@/stores/auth'
 import botComment from '../../fixtures/comment-bot.json'
 import { full, ME, ticket, type Mocked } from '../../stores/helpers'
+import { useBoardStore } from '@/stores/board'
 import { seedBoard } from '../helpers'
+
+const useBoardStoreForTest = () => useBoardStore()
 
 const T = ticketsApi as unknown as Mocked
 const C = commentsApi as unknown as Mocked
+const D = decisionsApi as unknown as Mocked
 
 let wrapper: VueWrapper | null = null
 
@@ -47,7 +53,7 @@ const body = () => document.body
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  for (const m of [T, C]) for (const f of Object.values(m)) f.mockReset()
+  for (const m of [T, C, D]) for (const f of Object.values(m)) f.mockReset()
   T.get.mockImplementation(async (id: string) => full(ticket(id === 't1' || id === 'WEB-1' ? 1 : 2, { status: id === 't1' || id === 'WEB-1' ? 'todo' : 'backlog' }), 'Hello **world**'))
   C.listAll.mockResolvedValue([botComment])
   C.activity.mockResolvedValue({ items: [], next_cursor: null })
@@ -205,5 +211,96 @@ describe('TicketPanel', () => {
     wrapper!.findComponent({ name: 'Sheet' }).vm.$emit('update:open', false)
     await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe('/p/WEB?priority=high')
+  })
+})
+
+describe('TicketPanel workflow block', () => {
+  const lab = (name: string) => ({ id: `l-${name}`, project_id: 'p1', name, color: 'gray' })
+  const decisionRow = {
+    gate: 'requirements', verdict: 'approved', note: 'Ship it', at: '2026-10-04T09:00:00Z',
+    by: { id: 'u2', name: 'Ana' }, current: true,
+  }
+  const gated = (extra: Record<string, unknown> = {}) =>
+    full(
+      ticket(1, {
+        status: 'todo',
+        labels: [lab('epic'), lab('awaiting-req-approval')],
+        workflow: {
+          pr_url: 'https://github.com/a/b/pull/7', branch: 'pabrika/WEB-1-x', round: { n: 2, max: 3 },
+          decisions: [decisionRow], ...extra,
+        } as never,
+      }),
+      'Desc',
+    )
+  const block = () => body().querySelector('[data-testid=workflow-block]')
+
+  it('shows stage, PR, branch and the latest decision; editors can decide', async () => {
+    T.get.mockResolvedValue(gated())
+    await open('/p/WEB/t/1', { role: 'editor' })
+    // the board copy of the ticket is the plain one; the block follows the board summary labels
+    const board = useBoardStoreForTest()
+    board.ticketsById = { ...board.ticketsById, t1: gated() }
+    await flushPromises()
+    expect(block()).toBeTruthy()
+    expect(block()!.textContent).toContain('Needs you: approve requirements')
+    expect(block()!.querySelector('[data-testid=panel-pr]')?.getAttribute('href')).toBe('https://github.com/a/b/pull/7')
+    expect(block()!.querySelector('[data-testid=panel-branch]')?.textContent).toBe('pabrika/WEB-1-x')
+    expect(block()!.querySelector('[data-testid=decision-card]')?.textContent).toContain('Approved')
+    expect(block()!.querySelector('[data-testid=decision-card]')?.textContent).toContain('Ana')
+    expect(block()!.querySelector('[data-testid=gate-actions]')).toBeTruthy()
+    expect(block()!.textContent).toContain('The Orchestrator applies the next stage')
+  })
+
+  it('viewers see the state but no buttons', async () => {
+    T.get.mockResolvedValue(gated())
+    await open('/p/WEB/t/1', { role: 'viewer' })
+    const board = useBoardStoreForTest()
+    board.ticketsById = { ...board.ticketsById, t1: gated() }
+    await flushPromises()
+    expect(block()!.textContent).toContain('Needs you: approve requirements')
+    expect(block()!.querySelector('[data-testid=gate-actions]')).toBeNull()
+  })
+
+  it('plain tickets have no workflow block', async () => {
+    await open('/p/WEB/t/1', { role: 'editor' })
+    expect(block()).toBeNull()
+  })
+
+  it('the merge gate has no decision buttons and says merging happens on GitHub', async () => {
+    const t = full(ticket(1, { labels: [lab('awaiting-merge')] }))
+    T.get.mockResolvedValue(t)
+    await open('/p/WEB/t/1', { role: 'owner' })
+    const board = useBoardStoreForTest()
+    board.ticketsById = { ...board.ticketsById, t1: t }
+    await flushPromises()
+    expect(block()!.querySelector('[data-testid=gate-actions]')).toBeNull()
+    expect(block()!.querySelector('[data-testid=merge-note]')).toBeTruthy()
+  })
+
+  it('shows a conflicting-labels hint', async () => {
+    const t = full(ticket(1, { labels: [lab('needs-dev'), lab('needs-qa')] }))
+    T.get.mockResolvedValue(t)
+    await open('/p/WEB/t/1', { role: 'editor' })
+    const board = useBoardStoreForTest()
+    board.ticketsById = { ...board.ticketsById, t1: t }
+    await flushPromises()
+    expect(block()!.querySelector('[data-testid=conflict-hint]')).toBeTruthy()
+  })
+
+  it('a recorded decision refetches the ticket', async () => {
+    T.get.mockResolvedValue(gated())
+    await open('/p/WEB/t/1', { role: 'editor' })
+    const board = useBoardStoreForTest()
+    board.ticketsById = { ...board.ticketsById, t1: gated() }
+    await flushPromises()
+    D.create.mockResolvedValue({ id: 'd1' })
+    const before = T.get.mock.calls.length
+    const approve = [...body().querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Approve')!
+    approve.click()
+    await flushPromises()
+    ;[...body().querySelectorAll('button')].filter((b) => b.textContent?.trim() === 'Approve').pop()!.click()
+    await flushPromises()
+    expect(D.create).toHaveBeenCalledWith('t1', { gate: 'requirements', verdict: 'approved' })
+    expect(T.get.mock.calls.length).toBeGreaterThan(before)
   })
 })

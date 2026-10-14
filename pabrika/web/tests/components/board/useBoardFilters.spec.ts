@@ -44,7 +44,7 @@ afterEach(() => vi.useRealTimers())
 describe('useBoardFilters', () => {
   it('restores filters from the URL query into the store', async () => {
     const { board } = await setup('/p/WEB?q=fix&priority=high,urgent&assignee=me&label=zzz')
-    expect(board.filters).toEqual({ q: 'fix', priority: ['high', 'urgent'], assignee: 'me', label: [] })
+    expect(board.filters).toEqual({ q: 'fix', priority: ['high', 'urgent'], assignee: 'me', label: [], attention: false })
     expect(board.filtersActive).toBe(true)
     expect(api.searchText.value).toBe('fix')
   })
@@ -81,5 +81,19 @@ describe('useBoardFilters', () => {
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({})
     expect(board.filtersActive).toBe(false)
+  })
+
+  it('restores "Needs my attention" from ?attention=1 and writes it back', async () => {
+    const { router, board } = await setup('/p/WEB?attention=1')
+    expect(board.filters.attention).toBe(true)
+    expect(board.filtersActive).toBe(true)
+    board.ticketsById = { ...board.ticketsById, t1: { ...board.ticketsById.t1, labels: [{ id: 'g', project_id: 'p1', name: 'awaiting-merge', color: 'amber' }] } }
+    expect(board.filteredColumns.backlog).toEqual(['t1'])
+    api.setAttention(false)
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({})
+    api.setAttention(true)
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ attention: '1' })
   })
 })
