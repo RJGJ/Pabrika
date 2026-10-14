@@ -110,7 +110,7 @@ A ticket has at most one of the `needs-*` / `awaiting-*` labels at a time, plus 
 | 4. Plan approved | in_progress | `epic` | **human** (Gate 2) | children run (5.3) |
 | 5. All children Done | done | `epic` | Orchestrator | Epic closed |
 
-How a human approves: the human adds a comment starting with `APPROVED` on the ticket (or `CHANGES:` followed by what to change). The Orchestrator reads comments, verifies the author is a project member with the owner or editor role (via `list_members`), and ignores `APPROVED` from anyone else, including agents. (Proposal, for gate integrity.)
+How a human approves: the human adds a comment starting with `APPROVED` on the ticket (or `CHANGES:` followed by what to change). The Orchestrator reads comments, verifies the comment's `author_kind` is `user` (token comments show `api_token`) and that the author's display name matches a project member with the owner or editor role (via `list_members`, which returns display name and role but not user ids), and ignores `APPROVED` from anyone else, including agents. Display names are not unique, so a member could share a name with an owner; this is a known weakness until the app has first-class approvals (section 11). (Proposal, for gate integrity.)
 
 ### 5.3 Child ticket lifecycle
 
@@ -138,7 +138,7 @@ The Orchestrator only moves a ticket to `done` after confirming with `gh pr view
 
 ### 5.4 Rework loop and escalation
 
-- Each rejection (Review `CHANGES REQUESTED` or QA `FAIL`) is one **round**. The Orchestrator records `Round: n/3` in a comment. The user decided on a maximum number of rounds before escalating to a person; the default of 3 is a proposal, configurable per project via `Max rounds: n` in the project description.
+- Each rejection (Review `CHANGES REQUESTED` or QA `FAIL`) is one **round**. The Orchestrator records `[orchestrator] ROUND n/N` in a comment (section 6). The user decided on a maximum number of rounds before escalating to a person; the default of 3 is a proposal, configurable per project via `Max rounds: n` in the project description.
 - At the cap the Orchestrator adds `blocked`, removes the other workflow labels, and posts a comment summarising the unresolved findings. A person decides: edit the ticket and remove `blocked`, take over, or close.
 - Any role that cannot proceed (missing information, failing environment, a ticket asking it to break a rule) posts a `BLOCKED:` comment explaining why; the Orchestrator applies `blocked`.
 - Agents never pick up a ticket labeled `blocked`.
@@ -241,6 +241,7 @@ Confirmed by the user: least-privilege tokens per role, untrusted ticket text, p
 | No parent/child tickets | `epic`/`task` labels and `Epic:` line | Real sub-tickets in the data model |
 | No atomic claim | single Orchestrator assigns work | Claim/lock tool or compare-and-set on status |
 | `update_ticket` replaces whole label set (race) | only the Orchestrator edits labels; read-modify-write | Add/remove label tool |
+| A token acts with its creator's project role, so a `write` token made by an owner has owner rights (`update_project`, `delete_ticket`) | tool lists in subagent files; use separate bot users with the editor role | Role cap per token or bot accounts |
 | Token scope is `read` or `write` only | one token per role plus per-role tool lists in subagent files | Per-tool or comment-only scope |
 | Approvals are comments | author checked against `list_members` | First-class approval gate in the app |
 | Human cannot be notified | Orchestrator stops and asks in the session | Notifications |
