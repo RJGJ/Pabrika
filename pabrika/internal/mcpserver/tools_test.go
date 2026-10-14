@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -121,6 +122,61 @@ func TestResolutionMessages(t *testing.T) {
 	r2 := f.call(dcs, "get_ticket", map[string]any{"ticket": "WEB-99"})
 	if !r1.IsError || strings.Replace(r1.Text, "WEB-1", "X", 1) != strings.Replace(r2.Text, "WEB-99", "X", 1) {
 		t.Fatalf("hidden ticket differs from nonexistent: %q vs %q", r1.Text, r2.Text)
+	}
+}
+
+func TestAddRemoveLabel(t *testing.T) {
+	f := newFx(t)
+	f.seedLabel("WEB", "backend")
+	f.seedLabel("WEB", "ui")
+	f.seedLabel("WEB", "ops")
+	f.seedTicket("WEB", "a", "todo")
+	cs, tokID := f.as(f.alice, service.ScopeWrite)
+	r := f.okCall(cs, "add_label", map[string]any{"ticket": "WEB-1", "labels": []string{"Backend", "ui"}})
+	if !reflect.DeepEqual(r["labels"], []any{"backend", "ui"}) {
+		t.Fatal(r)
+	}
+	// adding a label already present is not an error and keeps the others
+	r = f.okCall(cs, "add_label", map[string]any{"ticket": "WEB-1", "labels": []string{"ui", "ops"}})
+	if !reflect.DeepEqual(r["labels"], []any{"backend", "ops", "ui"}) {
+		t.Fatal(r)
+	}
+	r = f.okCall(cs, "remove_label", map[string]any{"ticket": "WEB-1", "labels": []string{"OPS"}})
+	if !reflect.DeepEqual(r["labels"], []any{"backend", "ui"}) {
+		t.Fatal(r)
+	}
+	// removing one it does not have is not an error
+	r = f.okCall(cs, "remove_label", map[string]any{"ticket": "WEB-1", "labels": []string{"ops"}})
+	if !reflect.DeepEqual(r["labels"], []any{"backend", "ui"}) {
+		t.Fatal(r)
+	}
+	f.errCall(cs, "add_label", map[string]any{"ticket": "WEB-1", "labels": []string{"nope"}}, `No label "nope" in project WEB. Labels: backend, ops, ui. Create one with create_label.`)
+	f.errCall(cs, "remove_label", map[string]any{"ticket": "WEB-9", "labels": []string{"ui"}}, "WEB-9")
+	tk, _ := f.env.Svc.Tickets.Get(context.Background(), f.aliceActor(), "WEB-1")
+	last := f.activity(tk.ID)
+	if a := last[len(last)-1]; a.Action != "labeled" || a.ActorID != tokID {
+		t.Fatalf("%+v", a)
+	}
+	// a read token neither sees nor can call them
+	rcs, _ := f.as(f.alice, service.ScopeRead)
+	for _, n := range toolNames(t, rcs) {
+		if n == "add_label" || n == "remove_label" {
+			t.Fatal("read token sees " + n)
+		}
+	}
+	if _, err := rcs.CallTool(context.Background(), &mcpCall{Name: "add_label", Arguments: map[string]any{"ticket": "WEB-1", "labels": []string{"ui"}}}); err == nil {
+		t.Fatal("hidden tool call must fail")
+	}
+	// schema bounds
+	lr, _ := cs.ListTools(context.Background(), nil)
+	for _, tl := range lr.Tools {
+		if tl.Name != "add_label" && tl.Name != "remove_label" {
+			continue
+		}
+		b, _ := json.Marshal(tl.InputSchema)
+		if !strings.Contains(string(b), `"maxItems":10`) || !strings.Contains(string(b), `"minItems":1`) {
+			t.Fatalf("%s schema %s", tl.Name, b)
+		}
 	}
 }
 
@@ -247,6 +303,14 @@ func TestMoveTicket(t *testing.T) {
 	f.errCall(cs, "move_ticket", map[string]any{"ticket": "WEB-1", "status": "doing"}, `Invalid status "doing"`)
 	f.errCall(cs, "move_ticket", map[string]any{"ticket": "WEB-1"}, "status is required.")
 	f.errCall(cs, "move_ticket", map[string]any{"ticket": "WEB-1", "status": "done", "place": "middle"}, `Invalid place "middle"`)
+	// compare-and-set: WEB-1 is in done now
+	f.errCall(cs, "move_ticket", map[string]any{"ticket": "WEB-1", "status": "in_progress", "expected_status": "todo"},
+		"Ticket WEB-1 is no longer in todo (now in done). Someone else probably picked it up. Call get_ticket to see its current state; nothing was changed.")
+	f.errCall(cs, "move_ticket", map[string]any{"ticket": "WEB-1", "status": "in_progress", "expected_status": "doing"}, `Invalid expected_status "doing"`)
+	if r := f.okCall(cs, "move_ticket", map[string]any{"ticket": "WEB-1", "status": "in_progress", "expected_status": "done"}); r["status"] != "in_progress" {
+		t.Fatal(r)
+	}
+	f.okCall(cs, "move_ticket", map[string]any{"ticket": "WEB-1", "status": "done"})
 	tk, _ := f.env.Svc.Tickets.Get(context.Background(), f.aliceActor(), "WEB-1")
 	last := f.activity(tk.ID)
 	if a := last[len(last)-1]; a.Action != "moved" || a.ActorID != tokID || a.ActorType != "api_token" {
@@ -324,6 +388,29 @@ func TestListTicketsFiltersAndPagination(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got(map[string]any{"query": "ticket 3"}), []string{"WEB-4"}) {
 		t.Fatal("query")
+	}
+	// multi-label: AND, merged with the single label param, unknown names reported together
+	f.seedLabel("WEB", "backend")
+	f.okCall(cs, "add_label", map[string]any{"ticket": "WEB-1", "labels": []string{"backend"}})
+	f.okCall(cs, "add_label", map[string]any{"ticket": "WEB-2", "labels": []string{"backend"}})
+	if !reflect.DeepEqual(got(map[string]any{"labels": []string{"ui", "backend"}}), []string{"WEB-1"}) {
+		t.Fatal("labels AND")
+	}
+	if !reflect.DeepEqual(got(map[string]any{"labels": []string{"backend"}}), []string{"WEB-1", "WEB-2"}) {
+		t.Fatal("labels single")
+	}
+	if !reflect.DeepEqual(got(map[string]any{"label": "ui", "labels": []string{"backend"}}), []string{"WEB-1"}) {
+		t.Fatal("label + labels merged")
+	}
+	f.errCall(cs, "list_tickets", map[string]any{"project": "WEB", "labels": []string{"ui", "nope", "nah"}}, `labels "nope", "nah" in project WEB`)
+	lr, _ := cs.ListTools(context.Background(), nil)
+	for _, tl := range lr.Tools {
+		if tl.Name == "list_tickets" {
+			b, _ := json.Marshal(tl.InputSchema)
+			if !strings.Contains(string(b), `"maxItems":10`) {
+				t.Fatalf("list_tickets schema %s", b)
+			}
+		}
 	}
 	f.errCall(cs, "list_tickets", map[string]any{"project": "WEB", "label": "zzz"}, `No label "zzz"`)
 	f.errCall(cs, "list_tickets", map[string]any{"project": "WEB", "status": "doing"}, "Invalid status")
@@ -512,7 +599,7 @@ func TestScopeAndSurface(t *testing.T) {
 	f := newFx(t)
 	f.seedTicket("WEB", "a", "todo")
 	read := []string{"get_ticket", "list_labels", "list_members", "list_projects", "list_tickets"}
-	write := append([]string{"add_comment", "create_label", "create_project", "create_ticket", "delete_ticket", "move_ticket", "update_comment", "update_project", "update_ticket"}, read...)
+	write := append([]string{"add_comment", "add_label", "create_label", "create_project", "create_ticket", "delete_ticket", "move_ticket", "remove_label", "update_comment", "update_project", "update_ticket"}, read...)
 	sort.Strings(write)
 	rcs, _ := f.as(f.alice, service.ScopeRead)
 	names := toolNames(t, rcs)
@@ -523,7 +610,7 @@ func TestScopeAndSurface(t *testing.T) {
 	wcs, _ := f.as(f.alice, service.ScopeWrite)
 	names = toolNames(t, wcs)
 	sort.Strings(names)
-	if !reflect.DeepEqual(names, write) || len(names) != 14 {
+	if !reflect.DeepEqual(names, write) || len(names) != 16 {
 		t.Fatal(names)
 	}
 	for _, n := range names {
@@ -556,7 +643,7 @@ func TestScopeAndSurface(t *testing.T) {
 		if (tl.Name == "delete_ticket") != (a.DestructiveHint != nil && *a.DestructiveHint) {
 			t.Fatalf("%s destructive", tl.Name)
 		}
-		if strings.HasPrefix(tl.Name, "update_") || tl.Name == "move_ticket" {
+		if strings.HasPrefix(tl.Name, "update_") || tl.Name == "move_ticket" || tl.Name == "add_label" || tl.Name == "remove_label" {
 			if !a.IdempotentHint {
 				t.Fatalf("%s idempotent", tl.Name)
 			}

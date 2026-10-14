@@ -92,7 +92,7 @@ func ownerEventActor(e *evEnv) service.EventActor {
 // catalogMethods are the "Interface.Method" names the catalog table below must exercise; the
 // completeness guard (TestEventsCompletenessGuard) uses the same list.
 var catalogMethods = []string{
-	"TicketService.Create", "TicketService.Update", "TicketService.Move", "TicketService.Delete",
+	"TicketService.Create", "TicketService.Update", "TicketService.Move", "TicketService.ChangeLabels", "TicketService.Delete",
 	"CommentService.Add", "CommentService.Edit", "CommentService.Delete",
 	"LabelService.Create", "LabelService.Update", "LabelService.Delete",
 	"MemberService.Add", "MemberService.SetRole", "MemberService.Remove",
@@ -148,6 +148,10 @@ func TestEventsCatalogRows(t *testing.T) {
 			lb, err = e.Svc.Labels.Create(ctx, owner, e.P.Key, service.LabelInput{Name: "bug", Color: "red"})
 			return
 		}, want: service.Event{Type: service.EventLabelChanged}, ids: func(ev *service.Event) { ev.LabelID = lb.ID }},
+		{name: "ticket labeled", method: "TicketService.ChangeLabels", run: func() (err error) {
+			_, err = e.Svc.Tickets.ChangeLabels(ctx, owner, tk.Ref, service.ChangeLabelsInput{Add: []string{lb.ID}})
+			return
+		}, want: service.Event{Type: service.EventTicketUpdated}, ids: func(ev *service.Event) { ev.TicketID = tk.ID }},
 		{name: "label updated", method: "LabelService.Update", run: func() (err error) {
 			_, err = e.Svc.Labels.Update(ctx, owner, lb.ID, service.UpdateLabelInput{Name: service.Some("bugs")})
 			return

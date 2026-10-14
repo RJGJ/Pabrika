@@ -75,6 +75,12 @@ func (m *Matrix) Actor(t testing.TB, who Who, token bool) service.Actor {
 	return m.Env.TokenActor(m.Env.NewToken(t, u.ID, service.ScopeWrite, ""))
 }
 
+// CommentTokenActor returns a fresh comment-scope, unlimited token actor owned by the role's user.
+func (m *Matrix) CommentTokenActor(t testing.TB, who Who) service.Actor {
+	t.Helper()
+	return m.Env.TokenActor(m.Env.NewToken(t, m.Users[who].ID, service.ScopeComment, ""))
+}
+
 // MatrixCase is one operation under test.
 type MatrixCase struct {
 	Name string
@@ -84,6 +90,9 @@ type MatrixCase struct {
 	Want map[Who]Outcome
 	// TokenWant overrides the expectation for write-token actors per role (default: same as Want).
 	TokenWant map[Who]Outcome
+	// CommentWant, when non-nil, also runs the case with a comment-scope token per role and
+	// compares with these outcomes (roles missing from the map are not run).
+	CommentWant map[Who]Outcome
 	// SessionOnly means every token actor must get Forbidden `session_required`, before any lookup.
 	SessionOnly bool
 	// Before runs before each (role, actor kind) run, e.g. to recreate state a previous run consumed.
@@ -94,6 +103,15 @@ type MatrixCase struct {
 func (m *Matrix) Run(t *testing.T, c MatrixCase) {
 	t.Helper()
 	for _, who := range AllWho {
+		if cw, ok := c.CommentWant[who]; ok {
+			who, cw := who, cw
+			t.Run(c.Name+"/"+string(who)+"/comment-token", func(t *testing.T) {
+				if c.Before != nil {
+					c.Before(t)
+				}
+				AssertOutcome(t, c.Op(t, m.CommentTokenActor(t, who)), cw)
+			})
+		}
 		want, ok := c.Want[who]
 		if !ok {
 			continue

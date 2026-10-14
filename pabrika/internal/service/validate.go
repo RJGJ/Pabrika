@@ -288,12 +288,54 @@ func (in UpdateTicketInput) Validate() error {
 	return f.err()
 }
 
+// MaxLabelFilter is the cap on labels in one ticket-list filter (AND semantics).
+const MaxLabelFilter = 10
+
+// MaxLabelChange is the cap on ids in each of the add and remove lists of ChangeLabels.
+const MaxLabelChange = 10
+
+// ChangeLabelsInput adds and removes labels (by id) without touching the ticket's other labels.
+type ChangeLabelsInput struct {
+	Add    []string `json:"add"`
+	Remove []string `json:"remove"`
+}
+
+// Validate checks shape and limits only (pure). Project membership and the per-ticket cap need the DB.
+func (in ChangeLabelsInput) Validate() error {
+	f := fieldErrs{}
+	add, remove := tktNormalizeIDs(in.Add), tktNormalizeIDs(in.Remove)
+	if len(add) == 0 && len(remove) == 0 {
+		f.add("add", "pass at least one label in add or remove")
+	}
+	if len(add) > MaxLabelChange {
+		f.add("add", fmt.Sprintf("at most %d labels per call", MaxLabelChange))
+	}
+	if len(remove) > MaxLabelChange {
+		f.add("remove", fmt.Sprintf("at most %d labels per call", MaxLabelChange))
+	}
+	inAdd := map[string]bool{}
+	for _, id := range add {
+		inAdd[id] = true
+	}
+	for _, id := range remove {
+		if inAdd[id] {
+			f.add("labels", "a label cannot be in both add and remove")
+			break
+		}
+	}
+	return f.err()
+}
+
 // MoveInput places a ticket. At most one of Before, After, Place; Place is "top" or "bottom".
+//
+// ExpectedStatus is an optional compare-and-set precondition: when set, the move only happens if
+// the ticket is currently in that status, otherwise Move returns status_conflict.
 type MoveInput struct {
-	Status Status `json:"status"`
-	Before string `json:"before"`
-	After  string `json:"after"`
-	Place  string `json:"place"`
+	Status         Status  `json:"status"`
+	Before         string  `json:"before"`
+	After          string  `json:"after"`
+	Place          string  `json:"place"`
+	ExpectedStatus *Status `json:"expected_status"`
 }
 
 // Validate checks shape only (pure). Anchor checks need the DB.
@@ -303,6 +345,9 @@ func (in MoveInput) Validate() error {
 		f.add("status", "is required")
 	} else if !in.Status.Valid() {
 		f.add("status", "must be one of backlog, todo, in_progress, done")
+	}
+	if in.ExpectedStatus != nil && !in.ExpectedStatus.Valid() {
+		f.add("expected_status", "must be one of backlog, todo, in_progress, done")
 	}
 	set := 0
 	for _, v := range []string{in.Before, in.After, in.Place} {

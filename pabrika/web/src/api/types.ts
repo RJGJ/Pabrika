@@ -6,7 +6,7 @@ export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export type Priority = (typeof PRIORITIES)[number]
 export const ROLES = ['owner', 'editor', 'viewer'] as const
 export type Role = (typeof ROLES)[number]
-export const SCOPES = ['read', 'write'] as const
+export const SCOPES = ['read', 'comment', 'write'] as const
 export type Scope = (typeof SCOPES)[number]
 export const LABEL_COLORS = [
   'gray', 'red', 'orange', 'amber', 'green', 'teal', 'blue', 'indigo', 'purple', 'pink',

@@ -69,7 +69,7 @@ func TestTimeFormat(t *testing.T) {
 func TestMigrate(t *testing.T) {
 	s := memStore(t)
 	v, err := s.Migrate(ctx)
-	if err != nil || v != 1 {
+	if err != nil || v != 2 {
 		t.Fatalf("rerun: %d %v", v, err)
 	}
 	want := []string{"users", "sessions", "projects", "project_members", "api_tokens", "labels",
@@ -126,7 +126,7 @@ func TestMigrateNewerDB(t *testing.T) {
 	if _, err := s.Migrate(ctx); err == nil {
 		t.Fatal("expected error for newer database")
 	}
-	if n := count(t, s, "SELECT count(*) FROM goose_db_version"); n != 3 {
+	if n := count(t, s, "SELECT count(*) FROM goose_db_version"); n != 4 {
 		t.Fatalf("version table changed: %d rows", n)
 	}
 }
@@ -170,7 +170,7 @@ func TestFileStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s2.Close()
-	if v, err := s2.Migrate(ctx); err != nil || v != 1 {
+	if v, err := s2.Migrate(ctx); err != nil || v != 2 {
 		t.Fatal(v, err)
 	}
 	if _, err := s2.Read().GetUserByID(ctx, "U1"); err != nil {

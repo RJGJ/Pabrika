@@ -73,6 +73,9 @@ func (c *call) mapErr(err error, o errOpts) *mcp.CallToolResult {
 	case service.KindForbidden:
 		switch se.Code {
 		case service.CodeInsufficientScope:
+			if c.p.Token != nil && c.p.Token.Scope == service.ScopeComment {
+				return toolErr("This token can only read tickets and add or edit its own comments. Use a write token for other changes.")
+			}
 			return toolErr("This token has read-only scope. Create a write token in Settings to make changes.")
 		case service.CodeNotAuthor:
 			return toolErr("You can only edit comments written by this token.")

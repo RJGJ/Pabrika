@@ -24,10 +24,10 @@ func tsp(t *time.Time) *string {
 	return &s
 }
 
-// effectiveRole caps a member role to viewer for a read-scope token. The service already
-// returns the effective role; capping again is idempotent and keeps the view layer safe.
+// effectiveRole caps a member role to viewer for a read or comment scope token. The service
+// already returns the effective role; capping again is idempotent and keeps the view layer safe.
 func effectiveRole(p auth.Principal, role service.Role) service.Role {
-	if p.Method == auth.MethodToken && p.Token != nil && p.Token.Scope == service.ScopeRead && role != "" {
+	if p.Method == auth.MethodToken && p.Token != nil && p.Token.Scope != service.ScopeWrite && role != "" {
 		return service.RoleViewer
 	}
 	return role

@@ -174,6 +174,12 @@ describe('TokensTable', () => {
     expect(b.text()).toContain('Never')
     expect(b.find('button').exists()).toBe(false)
   })
+  it('shows a comment token scope', () => {
+    const s = useTokensStore()
+    s.items = [token('c', { scope: 'comment' })]
+    const w = mountIt(TokensTable)
+    expect(w.find('[data-testid=token-c]').text()).toContain('comment')
+  })
   it('revokes after confirm', async () => {
     const s = useTokensStore()
     s.items = [token('a')]
@@ -210,6 +216,32 @@ describe('token flow', () => {
     expect(tApi.create).toHaveBeenCalledWith({ name: 'Agent', scope: 'read' })
     w.unmount()
     mounted.pop()
+  })
+
+  it('offers read, comment and write scopes, read first and selected', async () => {
+    setupProjects()
+    mountIt(CreateTokenDialog, { open: true })
+    await flushPromises()
+    const sel = document.body.querySelector('#token-scope') as HTMLSelectElement
+    expect([...sel.options].map((o) => [o.value, o.textContent?.trim()])).toEqual([
+      ['read', 'Read (view only)'],
+      ['comment', 'Comment (read and comment)'],
+      ['write', 'Write (create and edit)'],
+    ])
+    expect(sel.value).toBe('read')
+  })
+
+  it('sends the comment scope', async () => {
+    setupProjects()
+    tApi.create.mockResolvedValue({ token: token('n', { scope: 'comment' }), secret: 'pb_secret' })
+    mountIt(CreateTokenDialog, { open: true })
+    await flushPromises()
+    typeInto('#token-name', 'Reviewer')
+    change('#token-scope', 'comment')
+    await flushPromises()
+    document.body.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    expect(tApi.create).toHaveBeenCalledWith({ name: 'Reviewer', scope: 'comment' })
   })
 
   it('project limit sends the project ULID, not the key', async () => {

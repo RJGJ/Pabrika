@@ -76,6 +76,12 @@ var (
 	ticketProp  = strProp("Ticket reference (for example WEB-12) or ticket id.", 0)
 )
 
+// changeLabelsProp is the 1..10 label-name list of add_label and remove_label.
+func changeLabelsProp(desc string) m {
+	return m{"type": "array", "description": desc,
+		"items": m{"type": "string", "maxLength": service.MaxLabelName}, "minItems": 1, "maxItems": service.MaxLabelChange}
+}
+
 func labelsProp() m {
 	return m{"type": "array", "description": "Label names that already exist in the project.",
 		"items": m{"type": "string", "maxLength": service.MaxLabelName}, "maxItems": service.MaxLabelsPerTicket}

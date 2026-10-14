@@ -99,7 +99,7 @@ func (rv *Resolver) ResolveBearer(r *http.Request) (Principal, error) {
 		return Principal{}, invalid
 	}
 	rv.touch(ctx, row.ID, row.LastUsedAt)
-	info := &TokenInfo{ID: row.ID, Name: row.Name, Scope: service.Scope(row.Scope)}
+	info := &TokenInfo{ID: row.ID, Name: row.Name, Scope: tokenScope(row.Scope)}
 	if row.ProjectID != nil {
 		info.ProjectID = *row.ProjectID
 		if row.ProjectKey != nil {
@@ -155,4 +155,13 @@ func (rv *Resolver) resolveSession(ctx context.Context, value string) (Principal
 	}
 	p.Session = &SessionInfo{TokenHash: rec.TokenHash, ExpiresAt: rec.ExpiresAt}
 	return p, nil
+}
+
+// tokenScope maps a stored scope to a service.Scope. Fail closed: anything unknown is read.
+func tokenScope(v string) service.Scope {
+	switch s := service.Scope(v); s {
+	case service.ScopeWrite, service.ScopeComment, service.ScopeRead:
+		return s
+	}
+	return service.ScopeRead
 }

@@ -123,13 +123,23 @@ func normalizeOrigin(v string) (string, bool) {
 	return scheme + "://" + host, true
 }
 
-// toolsFor returns the tools a principal may see: read scope gets the 5 read tools, write
-// scope all 14. The service enforces scope again on every write.
+// toolsFor returns the tools a principal may see: a read token the 5 read tools, a comment
+// token those plus add_comment and update_comment (7), a write token all 16. Fail closed: an
+// unknown scope, or no token at all, sees the read tools only. The service enforces scope
+// again on every write.
 func toolsFor(p auth.Principal) []*toolDef {
-	readOnly := p.Token == nil || p.Token.Scope != service.ScopeWrite
+	have := scopeRead
+	if p.Token != nil {
+		switch p.Token.Scope {
+		case service.ScopeWrite:
+			have = scopeWrite
+		case service.ScopeComment:
+			have = scopeComment
+		}
+	}
 	var out []*toolDef
 	for _, d := range allTools {
-		if d.write && readOnly {
+		if d.scope > have {
 			continue
 		}
 		out = append(out, d)

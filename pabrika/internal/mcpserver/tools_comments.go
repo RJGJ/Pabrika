@@ -17,7 +17,7 @@ func commentTools() []*toolDef {
 	}, "comment", "body")
 	return []*toolDef{
 		{
-			name: "add_comment", title: "Add comment", write: true, schema: addSchema,
+			name: "add_comment", title: "Add comment", scope: scopeComment, schema: addSchema,
 			desc: "Add a markdown comment to a ticket. It is shown as written by this token's name. Returns the comment id. Not idempotent." + notIdempotent,
 			run: func(c *call, args []byte) *mcp.CallToolResult {
 				var in struct {
@@ -42,7 +42,7 @@ func commentTools() []*toolDef {
 			},
 		},
 		{
-			name: "update_comment", title: "Update comment", write: true, idempotent: true, schema: editSchema,
+			name: "update_comment", title: "Update comment", scope: scopeComment, idempotent: true, schema: editSchema,
 			desc: "Edit the body of a comment that you wrote earlier with add_comment. Pass the comment id (shown in get_ticket and in the add_comment result) and the new full body in markdown. " +
 				"You can only edit comments written by this same token; comments by people or other tokens cannot be changed.",
 			run: func(c *call, args []byte) *mcp.CallToolResult {

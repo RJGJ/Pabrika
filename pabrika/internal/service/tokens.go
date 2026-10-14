@@ -57,8 +57,8 @@ type tokenService struct{ s *Services }
 func (in CreateTokenInput) validate() error {
 	f := fieldErrs{}
 	f.text("name", in.Name, MaxTokenName)
-	if in.Scope != ScopeRead && in.Scope != ScopeWrite {
-		f.add("scope", "must be read or write")
+	if in.Scope != ScopeRead && in.Scope != ScopeComment && in.Scope != ScopeWrite {
+		f.add("scope", "must be read, comment or write")
 	}
 	return f.err()
 }

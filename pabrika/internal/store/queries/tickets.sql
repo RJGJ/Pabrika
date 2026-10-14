@@ -40,7 +40,10 @@ ORDER BY position, id;
 -- name: TicketListPage :many
 -- Board order: status rank, position, id. Keyset predicate in expanded OR form (no row values).
 -- description is intentionally not selected. query_text is a literal substring (instr, so no
--- LIKE wildcards to escape; lower() is ASCII-only, as the spec accepts).
+-- LIKE wildcards to escape; lower() is ASCII-only, as the spec accepts). The label filter is AND:
+-- label_count is the number of distinct ids given (0 = no filter) and label_id_1..10 are those ids
+-- (unused slots NULL, which never match); a fixed arity because sqlc slices cannot be mixed safely
+-- with the numbered parameters here.
 SELECT t.id, t.project_id, t.number, t.title, t.status, t.priority, t.assignee_id, t.position,
        t.due_date, t.created_at, t.updated_at,
        CAST(CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END AS INTEGER) AS status_rank
@@ -50,8 +53,19 @@ WHERE t.project_id = sqlc.arg(project_id) AND t.deleted_at IS NULL
   AND (CAST(sqlc.narg(priority) AS TEXT) IS NULL OR t.priority = CAST(sqlc.narg(priority) AS TEXT))
   AND (CAST(sqlc.arg(unassigned) AS INTEGER) = 0 OR t.assignee_id IS NULL)
   AND (CAST(sqlc.narg(assignee_id) AS TEXT) IS NULL OR t.assignee_id = CAST(sqlc.narg(assignee_id) AS TEXT))
-  AND (CAST(sqlc.narg(label_id) AS TEXT) IS NULL OR EXISTS (
-        SELECT 1 FROM ticket_labels tl WHERE tl.ticket_id = t.id AND tl.label_id = CAST(sqlc.narg(label_id) AS TEXT)))
+  AND (CAST(sqlc.arg(label_count) AS INTEGER) = 0 OR
+       (SELECT COUNT(DISTINCT tl.label_id) FROM ticket_labels tl
+        WHERE tl.ticket_id = t.id AND tl.label_id IN (
+          CAST(sqlc.narg(label_id_1) AS TEXT),
+          CAST(sqlc.narg(label_id_2) AS TEXT),
+          CAST(sqlc.narg(label_id_3) AS TEXT),
+          CAST(sqlc.narg(label_id_4) AS TEXT),
+          CAST(sqlc.narg(label_id_5) AS TEXT),
+          CAST(sqlc.narg(label_id_6) AS TEXT),
+          CAST(sqlc.narg(label_id_7) AS TEXT),
+          CAST(sqlc.narg(label_id_8) AS TEXT),
+          CAST(sqlc.narg(label_id_9) AS TEXT),
+          CAST(sqlc.narg(label_id_10) AS TEXT))) = CAST(sqlc.arg(label_count) AS INTEGER))
   AND (CAST(sqlc.narg(query_text) AS TEXT) IS NULL
        OR instr(lower(t.title), lower(CAST(sqlc.narg(query_text) AS TEXT))) > 0
        OR instr(lower(t.description), lower(CAST(sqlc.narg(query_text) AS TEXT))) > 0)
@@ -93,6 +107,19 @@ DELETE FROM ticket_labels WHERE ticket_id = ?;
 
 -- name: TicketAddLabel :exec
 INSERT INTO ticket_labels (ticket_id, label_id) VALUES (?, ?);
+
+-- name: TicketAddLabelIfAbsent :exec
+-- Idempotent label add used by ChangeLabels: adding a label the ticket already has is a no-op.
+INSERT INTO ticket_labels (ticket_id, label_id) VALUES (?, ?)
+ON CONFLICT (ticket_id, label_id) DO NOTHING;
+
+-- name: TicketRemoveLabels :exec
+-- Removes the given labels from one ticket; labels it does not have are ignored.
+DELETE FROM ticket_labels WHERE ticket_id = sqlc.arg(ticket_id) AND label_id IN (sqlc.slice('label_ids'));
+
+-- name: TicketTouch :exec
+-- Bumps updated_at only (label changes that go through ChangeLabels).
+UPDATE tickets SET updated_at = ? WHERE id = ?;
 
 -- name: TicketIsMember :one
 SELECT COUNT(*) FROM project_members WHERE project_id = ? AND user_id = ?;

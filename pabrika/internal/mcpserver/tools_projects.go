@@ -110,7 +110,7 @@ func writeProjectTools() []*toolDef {
 	}, "project", "name")
 	return []*toolDef{
 		{
-			name: "create_project", title: "Create project", write: true, schema: createSchema,
+			name: "create_project", title: "Create project", scope: scopeWrite, schema: createSchema,
 			desc: "Create a project. You become its owner. The key is 2-6 uppercase letters and is used in ticket references like WEB-12; it cannot be changed later. Not idempotent.",
 			run: func(c *call, args []byte) *mcp.CallToolResult {
 				var in struct {
@@ -143,7 +143,7 @@ func writeProjectTools() []*toolDef {
 			},
 		},
 		{
-			name: "update_project", title: "Update project", write: true, idempotent: true, schema: updateSchema,
+			name: "update_project", title: "Update project", scope: scopeWrite, idempotent: true, schema: updateSchema,
 			desc: "Rename a project, edit its description, or archive/unarchive it. Projects cannot be deleted over MCP.",
 			run: func(c *call, args []byte) *mcp.CallToolResult {
 				var in struct {
@@ -182,7 +182,7 @@ func writeProjectTools() []*toolDef {
 			},
 		},
 		{
-			name: "create_label", title: "Create label", write: true, schema: labelSchema,
+			name: "create_label", title: "Create label", scope: scopeWrite, schema: labelSchema,
 			desc: "Create a label in a project. Label names are unique per project, case-insensitive." + notIdempotent,
 			run: func(c *call, args []byte) *mcp.CallToolResult {
 				var in struct {

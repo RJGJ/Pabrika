@@ -187,9 +187,11 @@ type mprinc struct {
 	anon  bool
 	token bool
 	read  bool
-	lim   string // "", "this", "other"
-	role  int
-	user  func(w *mworld) *Client
+	// comment marks a comment-scope token: it may only reach the routes flagged commentOK
+	comment bool
+	lim     string // "", "this", "other"
+	role    int
+	user    func(w *mworld) *Client
 }
 
 var (
@@ -208,6 +210,9 @@ var mprincs = []mprinc{
 	{name: "write token as viewer", token: true, role: rViewer, user: uViewer},
 	{name: "write token as editor", token: true, role: rEditor, user: uEditor},
 	{name: "write token as owner", token: true, role: rOwner, user: uOwner},
+	{name: "comment token as viewer", token: true, comment: true, role: rViewer, user: uViewer},
+	{name: "comment token as editor", token: true, comment: true, role: rEditor, user: uEditor},
+	{name: "comment token as owner", token: true, comment: true, role: rOwner, user: uOwner},
 	{name: "read token as editor", token: true, read: true, role: rEditor, user: uEditor},
 	{name: "read token as owner", token: true, read: true, role: rOwner, user: uOwner},
 	{name: "limited write token (this project)", token: true, lim: "this", role: rOwner, user: uOwner},
@@ -228,6 +233,9 @@ func (p mprinc) opts(t testing.TB, sc *mscene) []ReqOpt {
 	scope := service.ScopeWrite
 	if p.read {
 		scope = service.ScopeRead
+	}
+	if p.comment {
+		scope = service.ScopeComment
 	}
 	limit := ""
 	switch p.lim {
@@ -260,6 +268,8 @@ type mrow struct {
 	ok     int
 	body   func(sc *mscene) any
 	stream bool // SSE: success is checked with an already-cancelled request context
+
+	commentOK bool // a comment-scope token may call it (must equal Route.CommentOK)
 
 	limitedForbidden bool                              // limited tokens get 403 forbidden (create project)
 	special          func(p mprinc, o outcome) outcome // overrides the computed outcome
@@ -310,13 +320,14 @@ var mrows = map[string]mrow{
 	"PATCH /api/v1/tickets/{id}":         {acc: "authed", write: true, min: rEditor, scoped: true, ok: 200, body: jb(map[string]any{"title": "edited"})},
 	"DELETE /api/v1/tickets/{id}":        {acc: "authed", write: true, min: rEditor, scoped: true, ok: 204},
 	"POST /api/v1/tickets/{id}/move":     {acc: "authed", write: true, min: rEditor, scoped: true, ok: 200, body: jb(map[string]any{"status": "done"})},
+	"PATCH /api/v1/tickets/{id}/labels":  {acc: "authed", write: true, min: rEditor, scoped: true, ok: 200, body: jb(map[string]any{"remove": []string{"01ARZ3NDEKTSV4RRFFQ69G5FAV"}})},
 	"GET /api/v1/tickets/{id}/activity":  {acc: "authed", min: rViewer, scoped: true, ok: 200},
 
 	"GET /api/v1/tickets/{id}/comments":  {acc: "authed", min: rViewer, scoped: true, ok: 200},
-	"POST /api/v1/tickets/{id}/comments": {acc: "authed", write: true, min: rEditor, scoped: true, ok: 201, body: jb(map[string]any{"body": "hello"})},
+	"POST /api/v1/tickets/{id}/comments": {acc: "authed", write: true, commentOK: true, min: rEditor, scoped: true, ok: 201, body: jb(map[string]any{"body": "hello"})},
 	// The seeded comment was written by the owner's SESSION, so only that exact actor may edit it:
 	// the owner's write token and every other member are forbidden.
-	"PATCH /api/v1/comments/{id}": {acc: "authed", write: true, min: rEditor, scoped: true, ok: 200, body: jb(map[string]any{"body": "edited"}),
+	"PATCH /api/v1/comments/{id}": {acc: "authed", write: true, commentOK: true, min: rEditor, scoped: true, ok: 200, body: jb(map[string]any{"body": "edited"}),
 		special: func(p mprinc, o outcome) outcome {
 			if o.code == 200 && !(p.role == rOwner && !p.token) {
 				return outcome{403, "forbidden"}
@@ -409,6 +420,9 @@ func (r mrow) expect(p mprinc) outcome {
 	if p.token && p.read && r.write {
 		return outcome{403, service.CodeInsufficientScope}
 	}
+	if p.token && p.comment && r.write && !r.commentOK {
+		return outcome{403, service.CodeInsufficientScope}
+	}
 	if !r.scoped {
 		if r.limitedForbidden && p.lim != "" {
 			return outcome{403, "forbidden"}
@@ -476,6 +490,12 @@ func TestMatrixCoversEveryRoute(t *testing.T) {
 		if row.write != rt.Write {
 			t.Errorf("%s: row says write=%v, route table says %v", rt.Pattern, row.write, rt.Write)
 		}
+		if row.commentOK != rt.CommentOK {
+			t.Errorf("%s: row says commentOK=%v, route table says %v", rt.Pattern, row.commentOK, rt.CommentOK)
+		}
+		if rt.CommentOK && !rt.Write {
+			t.Errorf("%s: CommentOK only makes sense on a write route", rt.Pattern)
+		}
 		if row.scoped && row.min == rNone {
 			t.Errorf("%s: scoped row needs a minimum role", rt.Pattern)
 		}
@@ -531,6 +551,7 @@ func TestSessionOnlyBeforeNotFoundOrValidation(t *testing.T) {
 	ownerTok, _ := w.h.MkToken(t, w.owner, service.ScopeWrite, "")
 	readTok, _ := w.h.MkToken(t, w.owner, service.ScopeRead, "")
 	limTok, _ := w.h.MkToken(t, w.owner, service.ScopeWrite, sc.other.ID)
+	commentTok, _ := w.h.MkToken(t, w.owner, service.ScopeComment, "")
 	bad := []string{`{garbage`, `{"unknown_field":1}`, `[]`}
 	n := 0
 	for _, rt := range apiRoutes(w.h.Server) {
@@ -546,11 +567,15 @@ func TestSessionOnlyBeforeNotFoundOrValidation(t *testing.T) {
 			{"write token", []ReqOpt{Bearer(ownerTok)}, outcome{403, service.CodeSessionRequired}},
 			{"read token", []ReqOpt{Bearer(readTok)}, outcome{403, service.CodeSessionRequired}},
 			{"limited token", []ReqOpt{Bearer(limTok)}, outcome{403, service.CodeSessionRequired}},
+			{"comment token", []ReqOpt{Bearer(commentTok)}, outcome{403, service.CodeSessionRequired}},
 		} {
 			want := who.want
 			if row.acc != "session" {
-				if who.name != "read token" {
+				if who.name != "read token" && who.name != "comment token" {
 					continue // a write token on an authed write route is a normal request
+				}
+				if who.name == "comment token" && row.commentOK {
+					continue // the two comment routes are open to a comment token
 				}
 				want = outcome{403, service.CodeInsufficientScope}
 			}
@@ -669,6 +694,7 @@ func TestOrderOfChecksInvalidForbiddenArchived(t *testing.T) {
 		{"POST /api/v1/projects/{id}/tickets", map[string]any{"title": longTitle}},
 		{"PATCH /api/v1/tickets/{id}", map[string]any{"title": longTitle}},
 		{"POST /api/v1/tickets/{id}/move", map[string]any{"status": "nonsense"}},
+		{"PATCH /api/v1/tickets/{id}/labels", map[string]any{"add": []string{}}},
 		{"POST /api/v1/projects/{id}/labels", map[string]any{"name": "", "color": "mauve"}},
 		{"PATCH /api/v1/labels/{id}", map[string]any{"name": strings.Repeat("l", 51)}},
 		{"POST /api/v1/tickets/{id}/comments", map[string]any{"body": ""}},
@@ -691,7 +717,7 @@ func TestOrderOfChecksInvalidForbiddenArchived(t *testing.T) {
 					r := w.h.Do(t, method, path, c.body, opts...)
 					want := outcome{422, "validation_failed"}
 					switch {
-					case p.token && p.read:
+					case p.token && (p.read || (p.comment && !mrows[c.pattern].commentOK)):
 						want = outcome{403, service.CodeInsufficientScope}
 					case p.role == rNone:
 						want = outcome{404, "not_found"}
