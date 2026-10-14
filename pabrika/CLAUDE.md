@@ -11,7 +11,7 @@ Status note: the Go, web and CLI commands below were each run once on Windows (G
 ```text
 cmd/pabrika/       subcommands: serve, user create, user reset-password, healthcheck, version
 internal/
-  config/          env parsing (PORT, DB_PATH, BASE_URL, ALLOW_SIGNUP, COOKIE_SECURE, TRUST_PROXY)
+  config/          env parsing (HOST, PORT, DB_PATH, BASE_URL, ALLOW_SIGNUP, COOKIE_SECURE, TRUST_PROXY)
   store/           SQLite (modernc.org/sqlite), sqlc output in store/db, queries in store/queries
   service/         business rules; Actor, authz, validation, ordering, events seam
   auth/            argon2id, sessions, API tokens, middleware

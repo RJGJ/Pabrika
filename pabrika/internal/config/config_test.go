@@ -44,6 +44,7 @@ func TestInvalid(t *testing.T) {
 		env  map[string]string
 		varn string
 	}{
+		{"host text", map[string]string{"HOST": "not a host"}, "HOST"},
 		{"port zero", map[string]string{"PORT": "0"}, "PORT"},
 		{"port high", map[string]string{"PORT": "65536"}, "PORT"},
 		{"port text", map[string]string{"PORT": "abc"}, "PORT"},
@@ -87,6 +88,18 @@ func TestOrigin(t *testing.T) {
 		}
 		if got := c.Origin(); got != tt.want {
 			t.Errorf("Origin(%s) = %s, want %s", tt.base, got, tt.want)
+		}
+	}
+}
+
+func TestHost(t *testing.T) {
+	for _, h := range []string{"127.0.0.1", "::1", "localhost"} {
+		c, err := config.Load(env(map[string]string{"HOST": h}))
+		if err != nil {
+			t.Fatalf("HOST=%q: %v", h, err)
+		}
+		if c.Host != h {
+			t.Fatalf("HOST=%q: got %q", h, c.Host)
 		}
 	}
 }
