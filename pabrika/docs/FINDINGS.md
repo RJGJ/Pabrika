@@ -9,7 +9,7 @@ Aggregated from the agents that implemented the six phases. This is the review l
 | 1 Foundation | Config, SQLite store, migrations, sqlc, service layer (projects, members, labels, tickets, comments, activity, users, tokens), authz, events seam, testutil | `go test` (service, store, config), concurrency tests on a file DB |
 | 2 Auth, sharing, REST | argon2id, sessions, API tokens, rate limits, httpapi core, all `/api/v1` endpoints, CLI (`serve`, `user create`, `user reset-password`, `healthcheck`, `version`) | httpapi tests incl. a 35-route x 12-principal matrix, golden shapes, hardening tests; real binary smoke test |
 | 3 Live updates | In-memory hub, SSE endpoint, shutdown wiring | hub stress test, service integration tests, SSE tests, real binary with an open stream |
-| 4 MCP | 14 tools (5 read, 9 write), 2 resources, Streamable HTTP on `/mcp` | SDK client end to end over httptest and the real mux, scope and limit matrices, real binary |
+| 4 MCP | 16 tools (5 read, 2 comment, 9 write after agentic phase 3; 14 when this was recorded), 2 resources, Streamable HTTP on `/mcp` | SDK client end to end over httptest and the real mux, scope and limit matrices, real binary |
 | 5 Web UI | Auth, board with drag and drop, ticket panel, live updates, project settings, account settings | 403 Vitest tests, build, `check:dist`; manual browser checks (partial, see below) |
 | 6 Ship | SPA handler and embedded UI, Makefile, audit script, Dockerfile and docs | audit tests, native binary smoke test; **Docker not run** |
 
