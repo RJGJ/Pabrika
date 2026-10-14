@@ -152,7 +152,7 @@ func (c *commentService) Latest(ctx context.Context, actor Actor, ticketRef stri
 func (c *commentService) Add(ctx context.Context, actor Actor, ticketRef, body string) (Comment, error) {
 	var out Comment
 	err := c.s.write(ctx, actor, func(tx *Tx) error {
-		loc, proj, _, err := c.s.resolveTicket(ctx, tx.Q, actor, ticketRef, RoleEditor, true)
+		loc, proj, _, err := c.s.resolveTicketFor(ctx, tx.Q, actor, ticketRef, RoleEditor, true, needComment)
 		if err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func (c *commentService) Edit(ctx context.Context, actor Actor, commentID, body 
 	var out Comment
 	err := c.s.write(ctx, actor, func(tx *Tx) error {
 		// 404 -> insufficient_scope -> forbidden (role below editor, e.g. a demoted author)
-		loc, proj, _, err := c.s.resolveComment(ctx, tx.Q, actor, commentID, RoleEditor, true)
+		loc, proj, _, err := c.s.resolveCommentFor(ctx, tx.Q, actor, commentID, RoleEditor, true, needComment)
 		if err != nil {
 			return err
 		}

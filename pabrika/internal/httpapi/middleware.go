@@ -294,8 +294,12 @@ func (s *Server) guard(rt Route) http.Handler {
 					WriteError(w, http.StatusForbidden, service.CodeSessionRequired, "This action requires a signed-in session")
 					return
 				}
-				if write && p.Token.Scope == service.ScopeRead {
-					WriteError(w, http.StatusForbidden, service.CodeInsufficientScope, "This token has read-only scope")
+				if write && p.Token.Scope != service.ScopeWrite && !(rt.CommentOK && p.Token.Scope == service.ScopeComment) {
+					msg := "This token has read-only scope"
+					if p.Token.Scope == service.ScopeComment {
+						msg = "This token can only read and comment"
+					}
+					WriteError(w, http.StatusForbidden, service.CodeInsufficientScope, msg)
 					return
 				}
 			}

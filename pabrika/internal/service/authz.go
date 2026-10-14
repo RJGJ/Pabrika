@@ -16,7 +16,8 @@ import (
 //  0. session-only operations: token actor -> Forbidden session_required (requireSession), before any lookup
 //  1. unknown project or non-member -> NotFound (identical message)
 //  2. token limited to another project -> NotFound (identical)
-//  3. write op with a read-scope actor -> Forbidden insufficient_scope
+//  3. write op with a read-scope actor -> Forbidden insufficient_scope (a comment-scope actor passes
+//     this step only for the comment operations: Comments.Add and Comments.Edit)
 //  4. effective role below the minimum -> Forbidden forbidden
 //  5. archived project on a ticket/label/comment write -> Conflict project_archived (requireWritable)
 //  6. input validation -> Validation (callers run Validate() last)
@@ -27,11 +28,28 @@ func (s *Services) checkActor(actor Actor, write bool) error {
 	if !actor.valid() {
 		return errForbidden(CodeForbidden, "Forbidden")
 	}
-	if write && actor.readOnly() {
-		return errForbidden(CodeInsufficientScope, "This token is read-only")
+	if write && !actor.canWrite() {
+		return errForbidden(CodeInsufficientScope, scopeDeniedMessage(actor))
 	}
 	return nil
 }
+
+// scopeDeniedMessage is the insufficient_scope text for a general write by a limited token.
+func scopeDeniedMessage(actor Actor) string {
+	if actor.Scope == ScopeComment {
+		return "This token can only read and comment"
+	}
+	return "This token is read-only"
+}
+
+// scopeNeed says which token scope an operation needs: general writes need write scope, the
+// comment operations also accept comment scope.
+type scopeNeed int
+
+const (
+	needWrite scopeNeed = iota
+	needComment
+)
 
 // requireUnlimited refuses a project-limited token for project-less operations (Projects.Create).
 func (s *Services) requireUnlimited(actor Actor) error {
@@ -86,6 +104,13 @@ func (s *Services) resolveProject(ctx context.Context, q *db.Queries, actor Acto
 // by min >= editor). It returns the project and the actor's EFFECTIVE role. Step 0 is the
 // caller's job (requireSession) because it must run before any lookup.
 func (s *Services) requireProject(ctx context.Context, q *db.Queries, actor Actor, ref string, min Role, write bool) (db.Project, Role, error) {
+	return s.requireProjectFor(ctx, q, actor, ref, min, write, needWrite)
+}
+
+// requireProjectFor is requireProject with the scope the operation needs. needComment only
+// relaxes step 3 (and the viewer cap that goes with it) for a comment-scope actor; the role check
+// of step 4 still applies in full.
+func (s *Services) requireProjectFor(ctx context.Context, q *db.Queries, actor Actor, ref string, min Role, write bool, need scopeNeed) (db.Project, Role, error) {
 	if !actor.valid() {
 		return db.Project{}, "", errForbidden(CodeForbidden, "Forbidden")
 	}
@@ -96,12 +121,15 @@ func (s *Services) requireProject(ctx context.Context, q *db.Queries, actor Acto
 	if actor.ProjectID != "" && actor.ProjectID != p.ID {
 		return db.Project{}, "", errNotFound()
 	}
-	if write || min.AtLeast(RoleEditor) {
+	commentOp := need == needComment && actor.canComment()
+	if (write || min.AtLeast(RoleEditor)) && !commentOp {
 		if err := s.checkActor(actor, true); err != nil {
 			return db.Project{}, "", err
 		}
 	}
-	role = effectiveRole(actor, role)
+	if !commentOp {
+		role = effectiveRole(actor, role)
+	}
 	if !role.AtLeast(min) {
 		return db.Project{}, "", errForbidden(CodeForbidden, "You do not have permission to do this")
 	}
@@ -159,11 +187,15 @@ func (s *Services) locateTicket(ctx context.Context, q *db.Queries, ref string) 
 // resolveTicket locates the ticket and applies requireProject on its project. A soft-deleted or
 // unknown ticket and a ticket in a project the actor cannot see give the same ErrNotFound.
 func (s *Services) resolveTicket(ctx context.Context, q *db.Queries, actor Actor, ref string, min Role, write bool) (ticketLoc, db.Project, Role, error) {
+	return s.resolveTicketFor(ctx, q, actor, ref, min, write, needWrite)
+}
+
+func (s *Services) resolveTicketFor(ctx context.Context, q *db.Queries, actor Actor, ref string, min Role, write bool, need scopeNeed) (ticketLoc, db.Project, Role, error) {
 	t, err := s.locateTicket(ctx, q, ref)
 	if err != nil {
 		return ticketLoc{}, db.Project{}, "", err
 	}
-	p, role, err := s.requireProject(ctx, q, actor, t.ProjectID, min, write)
+	p, role, err := s.requireProjectFor(ctx, q, actor, t.ProjectID, min, write, need)
 	if err != nil {
 		return ticketLoc{}, db.Project{}, "", err
 	}
@@ -196,6 +228,10 @@ type commentLoc struct {
 
 // resolveComment locates a live comment on a live ticket and applies requireProject on its project.
 func (s *Services) resolveComment(ctx context.Context, q *db.Queries, actor Actor, commentID string, min Role, write bool) (commentLoc, db.Project, Role, error) {
+	return s.resolveCommentFor(ctx, q, actor, commentID, min, write, needWrite)
+}
+
+func (s *Services) resolveCommentFor(ctx context.Context, q *db.Queries, actor Actor, commentID string, min Role, write bool, need scopeNeed) (commentLoc, db.Project, Role, error) {
 	if !IsULID(commentID) {
 		return commentLoc{}, db.Project{}, "", errNotFound()
 	}
@@ -203,7 +239,7 @@ func (s *Services) resolveComment(ctx context.Context, q *db.Queries, actor Acto
 	if err != nil {
 		return commentLoc{}, db.Project{}, "", mapNoRows(err)
 	}
-	p, role, err := s.requireProject(ctx, q, actor, r.ProjectID, min, write)
+	p, role, err := s.requireProjectFor(ctx, q, actor, r.ProjectID, min, write, need)
 	if err != nil {
 		return commentLoc{}, db.Project{}, "", err
 	}

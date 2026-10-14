@@ -11,7 +11,7 @@ Status: the non-Docker paths (build, run, CLI, REST, MCP, shutdown, restart) wer
 - Projects with four fixed columns (Backlog, To do, In progress, Done), drag and drop, labels, assignees, due dates, priorities and comments.
 - Sharing per project with three roles: owner, editor, viewer. Owners add people who already have an account, by email.
 - Live updates: every change, from the UI, REST or an agent, appears on open boards without a refresh (Server-Sent Events).
-- MCP server at `/mcp` with 14 tools, read or write API tokens, optional single-project tokens.
+- MCP server at `/mcp` with 16 tools, read, comment or write API tokens, optional single-project tokens.
 - Email and password login (argon2id), session cookies, CSRF defences, rate limiting.
 - One container, one process, one volume. No Bun or Node at runtime.
 
@@ -97,7 +97,7 @@ Signed-in users can change their display name and password in account settings. 
 
 ## Connect an agent over MCP
 
-1. In the web app open Settings and create an API token. Pick a scope (`write`, or `read` for read-only tools), optionally limit it to one project, and copy it: it is shown once.
+1. In the web app open Settings and create an API token. Pick a scope (`write`; `read` for read-only tools; `comment` to read and add or edit its own comments only), optionally limit it to one project, and copy it: it is shown once.
 2. Add the server to Claude Code:
 
    ```bash
@@ -115,24 +115,28 @@ Signed-in users can change their display name and password in account settings. 
 
 Ready-made agent playbooks (standup, triage, planner, worker) are in [agents/](../agents/).
 
-Tools (14). Read tokens see only the first five; write tokens see all:
+Tools (16). Read tokens see only the first five (5 tools); comment tokens also see `add_comment` and `update_comment` (7 tools); write tokens see all 16:
 
 | Tool | Purpose |
 |---|---|
 | `list_projects` | List projects (`include_archived?`) |
 | `list_members` | List a project's members |
 | `list_labels` | List a project's labels |
-| `list_tickets` | List tickets with filters and pagination |
+| `list_tickets` | List tickets with filters and pagination; `labels` (names) keeps only tickets that have all of them (max 10) |
 | `get_ticket` | One ticket with labels, assignee and recent comments |
 | `create_project` | Create a project (write) |
 | `update_project` | Rename, edit description, archive (write, owner) |
 | `create_label` | Create a label (write) |
 | `create_ticket` | Create a ticket (write) |
 | `update_ticket` | Edit a ticket (write) |
-| `move_ticket` | Change status and position (write) |
-| `add_comment` | Add a comment (write) |
-| `update_comment` | Edit a comment; agents edit only comments they wrote (write) |
+| `move_ticket` | Change status and position (write). Pass `expected_status` to claim safely: it only moves if the ticket is still in that column, otherwise a conflict (409 `status_conflict`) and nothing changes |
+| `add_label` | Add labels to a ticket without touching its other labels; adding one it already has is not an error (write) |
+| `remove_label` | Remove labels from a ticket without touching its other labels; removing one it lacks is not an error (write) |
+| `add_comment` | Add a comment (comment, write) |
+| `update_comment` | Edit a comment; agents edit only comments they wrote (comment, write) |
 | `delete_ticket` | Soft delete; needs `confirm: true` (write) |
+
+REST equivalents: `POST /api/v1/tickets/{id}/move` accepts `expected_status`; `PATCH /api/v1/tickets/{id}/labels` takes `{"add": [label ids], "remove": [label ids]}`; `GET /api/v1/projects/{id}/tickets?label=<id>&label=<id>` repeats `label` for an all-of filter (other parameters still may be given once). Tokens can be created with scope `read`, `comment` or `write`; a `comment` token can call only `POST /tickets/{id}/comments` and `PATCH /comments/{id}` besides reads, and its role is shown as viewer.
 
 `project` accepts a key (`WEB`) or id, `ticket` a reference (`WEB-12`) or id, `assignee` an email, `labels` label names. Project deletion and member management are not available over MCP.
 
@@ -141,7 +145,7 @@ Example prompts: "List my Pabrika projects." "Create a ticket in WEB titled 'Fix
 Safety:
 
 - Tokens are shown once. Do not commit them; revoke them in Settings.
-- **Ticket and comment text is untrusted.** It can contain instructions aimed at your agent (prompt injection). For agents that read tickets written by other people, use a read-only token or a project-limited token.
+- **Ticket and comment text is untrusted.** It can contain instructions aimed at your agent (prompt injection). For agents that read tickets written by other people, use a read-only (or `comment`) token or a project-limited token.
 - `/mcp` ignores cookies and needs a bearer token. If an `Origin` header is present it must equal `BASE_URL`, so browser-origin MCP clients are rejected; Claude Code and other non-browser clients send none.
 - `GET /mcp` returning 405 is expected (stateless mode).
 - REST scripting: `curl` with `Authorization: Bearer` works against `/api/v1` without an `Origin` header. Requests that carry a cookie, and unauthenticated unsafe requests such as login, get 403 `origin_mismatch` without a matching `Origin` header, by design.
@@ -249,7 +253,7 @@ docker run -d --name pabrika ...   # same run command as before
 
 Backups contain password and token hashes; encrypt them if they leave the machine.
 
-Upgrade: back up, rebuild or pull the image, then `docker stop pabrika`, `docker rm pabrika`, and `docker run` again with the same volume. Migrations apply on start; rollback means restoring the backup. Restoring a newer database into an older image is not supported.
+Upgrade: back up, rebuild or pull the image, then `docker stop pabrika`, `docker rm pabrika`, and `docker run` again with the same volume. Migrations apply on start; rollback means restoring the backup. Migration 00002 (comment token scope) must be rolled back with `goose down` (comment tokens become read tokens) before an older binary is used; swapping the binary alone is not safe. Restoring a newer database into an older image is not supported.
 
 ## Security notes
 

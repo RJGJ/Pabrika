@@ -97,6 +97,8 @@ type Querier interface {
 	// One session joined with its user. Expiry is judged by the caller (it owns the clock).
 	SessionGetByHash(ctx context.Context, tokenHash string) (SessionGetByHashRow, error)
 	TicketAddLabel(ctx context.Context, arg TicketAddLabelParams) error
+	// Idempotent label add used by ChangeLabels: adding a label the ticket already has is a no-op.
+	TicketAddLabelIfAbsent(ctx context.Context, arg TicketAddLabelIfAbsentParams) error
 	// Ticket queries. Every name carries the Ticket prefix (names are global across all .sql files).
 	// Atomic per-project counter; runs inside the create transaction.
 	TicketAllocateNumber(ctx context.Context, id string) (int64, error)
@@ -115,8 +117,13 @@ type Querier interface {
 	TicketListColumn(ctx context.Context, arg TicketListColumnParams) ([]TicketListColumnRow, error)
 	// Board order: status rank, position, id. Keyset predicate in expanded OR form (no row values).
 	// description is intentionally not selected. query_text is a literal substring (instr, so no
-	// LIKE wildcards to escape; lower() is ASCII-only, as the spec accepts).
+	// LIKE wildcards to escape; lower() is ASCII-only, as the spec accepts). The label filter is AND:
+	// label_count is the number of distinct ids given (0 = no filter) and label_id_1..10 are those ids
+	// (unused slots NULL, which never match); a fixed arity because sqlc slices cannot be mixed safely
+	// with the numbered parameters here.
 	TicketListPage(ctx context.Context, arg TicketListPageParams) ([]TicketListPageRow, error)
+	// Removes the given labels from one ticket; labels it does not have are ignored.
+	TicketRemoveLabels(ctx context.Context, arg TicketRemoveLabelsParams) error
 	// Test only: a ticket row including soft-deleted ones.
 	TicketSeedGetRaw(ctx context.Context, id string) (Ticket, error)
 	// Test seeding only: a label without going through the Labels service.
@@ -124,6 +131,8 @@ type Querier interface {
 	// Renumbering: position only, no updated_at bump.
 	TicketSetPosition(ctx context.Context, arg TicketSetPositionParams) error
 	TicketSoftDelete(ctx context.Context, arg TicketSoftDeleteParams) (int64, error)
+	// Bumps updated_at only (label changes that go through ChangeLabels).
+	TicketTouch(ctx context.Context, arg TicketTouchParams) error
 	TicketUpdateFields(ctx context.Context, arg TicketUpdateFieldsParams) error
 	TicketUpdateMove(ctx context.Context, arg TicketUpdateMoveParams) error
 	// Batched assignee hydration.

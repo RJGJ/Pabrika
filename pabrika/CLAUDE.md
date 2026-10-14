@@ -77,7 +77,7 @@ go run ./cmd/pabrika version
 - REST and MCP share input structs, enums, caps and `Validate()` from `service`. Key, email and label-name resolution for MCP lives in `mcpserver`.
 - Ticket references look like `WEB-12`; project paths accept the key or the ULID. Ticket JSON uses `ref` and `project_key`.
 - Events are published by the service after DB commit, never from handlers or MCP tools.
-- Token scope and project limit are enforced in the service layer through `Actor`.
+- Token scope and project limit are enforced in the service layer through `Actor`. Scopes are `read`, `comment` (reads plus `Comments.Add` and editing own comments) and `write`; unknown values fail closed to read. REST write routes refuse a `comment` token unless registered with `routeComment` (`Route.CommentOK`). `move` takes an optional `expected_status` and answers `status_conflict` (409) on a mismatch.
 - Limits: comment body 20,000 characters, ticket description 20,000, title 200, project name 100, description 2,000, label name 50, display name 1 to 100.
 - Commit messages: small, focused commits.
 

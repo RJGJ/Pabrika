@@ -275,7 +275,7 @@ func TestEndToEndThroughMux(t *testing.T) {
 	tokID, secret := h.token("bob", service.ScopeWrite, nil)
 	cs := h.sdkClient(secret)
 	names := toolNames(t, cs)
-	if len(names) != 14 {
+	if len(names) != 16 {
 		t.Fatal(names)
 	}
 	pl := h.okCall(cs, "list_projects", nil)
@@ -366,6 +366,7 @@ func TestSchemasDrift(t *testing.T) {
 		"list_labels": {"project"}, "create_label": {"project", "name"}, "list_tickets": {"project"}, "get_ticket": {"ticket"},
 		"create_ticket": {"project", "title"}, "update_ticket": {"ticket"}, "move_ticket": {"ticket", "status"},
 		"add_comment": {"ticket", "body"}, "delete_ticket": {"ticket"}, "update_comment": {"comment", "body"},
+		"add_label": {"ticket", "labels"}, "remove_label": {"ticket", "labels"},
 	}
 	if len(def) != len(required) {
 		t.Fatal("tool count")

@@ -82,6 +82,7 @@ const (
 	CodeUserNotFound      = "user_not_found"
 	CodeAnchorInvalid     = "anchor_invalid"
 	CodeInvalidCursor     = "invalid_cursor"
+	CodeStatusConflict    = "status_conflict"
 )
 
 // errNotFound returns the one not-found error used for unknown AND not-visible resources,

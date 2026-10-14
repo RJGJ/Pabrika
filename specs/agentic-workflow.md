@@ -239,13 +239,13 @@ Confirmed by the user: least-privilege tokens per role, untrusted ticket text, p
 |---|---|---|
 | Fixed columns (backlog, todo, in progress, done) | sub-stages as labels | Configurable stages per project; separate spec **(user-requested follow-up)** |
 | No parent/child tickets | `epic`/`task` labels and `Epic:` line | Real sub-tickets in the data model |
-| No atomic claim | single Orchestrator assigns work | Claim/lock tool or compare-and-set on status |
-| `update_ticket` replaces whole label set (race) | only the Orchestrator edits labels; read-modify-write | Add/remove label tool |
-| Token scope is `read` or `write` only | one token per role plus per-role tool lists in subagent files | Per-tool or comment-only scope |
+| No atomic claim | single Orchestrator assigns work | **Closed (agentic phase 3):** `move_ticket` with `expected_status` is a compare-and-set claim (409 `status_conflict` for the loser) |
+| `update_ticket` replaces whole label set (race) | only the Orchestrator edits labels; read-modify-write | **Closed (agentic phase 3):** `add_label` / `remove_label` (REST `PATCH /tickets/{id}/labels`) never touch other labels |
+| Token scope is `read` or `write` only | one token per role plus per-role tool lists in subagent files | **Closed (agentic phase 3):** `comment` scope (read, add comment, edit own comment); per-tool scopes remain future work |
 | Approvals are comments | author checked against `list_members` | First-class approval gate in the app |
 | Human cannot be notified | Orchestrator stops and asks in the session | Notifications |
 | Agents are not launched by Pabrika | user runs Claude Code | Runner component |
-| No `label` filter combination (one label per `list_tickets` call) | several calls | Multi-label filter |
+| No `label` filter combination (one label per `list_tickets` call) | several calls | **Closed (agentic phase 3):** `list_tickets` `labels` (all must match, max 10); REST repeated `label` |
 
 ## 12. Open questions
 

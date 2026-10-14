@@ -80,6 +80,7 @@ type TicketService interface {
 	List(ctx context.Context, actor Actor, projectRef string, f TicketFilter) (TicketPage, error)
 	Update(ctx context.Context, actor Actor, ref string, in UpdateTicketInput) (Ticket, error)
 	Move(ctx context.Context, actor Actor, ref string, in MoveInput) (MoveResult, error)
+	ChangeLabels(ctx context.Context, actor Actor, ref string, in ChangeLabelsInput) (Ticket, error)
 	Delete(ctx context.Context, actor Actor, ref string) error
 	Resolve(ctx context.Context, actor Actor, ref string) (TicketRef, error)
 }
@@ -93,7 +94,8 @@ type TicketFilter struct {
 	Status   *Status
 	Priority *Priority
 	Assignee *AssigneeFilter
-	LabelID  string
+	LabelID  string   // single label, kept for compatibility; merged into LabelIDs
+	LabelIDs []string // all of these labels must be present (AND), at most MaxLabelFilter
 	Query    string
 	Limit    int
 	Cursor   string

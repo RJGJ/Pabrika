@@ -390,6 +390,31 @@ func TestTickets_ListFiltersAndOrder(t *testing.T) {
 	}
 }
 
+func TestTickets_ListMultiLabel(t *testing.T) {
+	w := tkSetup(t)
+	bug, ui := w.label(t, "WEB", "bug"), w.label(t, "WEB", "ui")
+	w.mk(t, map[string]any{"title": "none"})
+	w.mk(t, map[string]any{"title": "bug", "labels": []string{bug}})
+	w.mk(t, map[string]any{"title": "both", "labels": []string{bug, ui}})
+	get := func(query string) []string {
+		return tkRefs(tkItems(t, w.h.Do(t, "GET", "/api/v1/projects/WEB/tickets"+query, nil, As(w.viewer))))
+	}
+	if got := get("?label=" + bug); !tkEq(got, []string{"WEB-2", "WEB-3"}) {
+		t.Errorf("single: %v", got)
+	}
+	if got := get("?label=" + bug + "&label=" + ui); !tkEq(got, []string{"WEB-3"}) {
+		t.Errorf("repeated: %v", got)
+	}
+	if got := get("?label=" + bug + "&label=" + bug); !tkEq(got, []string{"WEB-2", "WEB-3"}) {
+		t.Errorf("duplicate: %v", got)
+	}
+	if got := get("?label=" + ui + "&label=01HZZZZZZZZZZZZZZZZZZZZZZZ"); got != nil && len(got) != 0 {
+		t.Errorf("unknown id: %v", got)
+	}
+	// other parameters still reject repeats and name their own field
+	tkFieldErr(t, w.h.Do(t, "GET", "/api/v1/projects/WEB/tickets?status=todo&status=done&label="+bug, nil, As(w.owner)), "status")
+}
+
 func TestTickets_ListQueryValidation(t *testing.T) {
 	w := tkSetup(t)
 	w.mk(t, map[string]any{"title": "A"})
@@ -400,7 +425,7 @@ func TestTickets_ListQueryValidation(t *testing.T) {
 		{"?status=todo&status=done", "status"},
 		{"?priority=low&priority=high", "priority"},
 		{"?assignee=me&assignee=none", "assignee"},
-		{"?label=a&label=b", "label"},
+		{"?label=a0&label=a1&label=a2&label=a3&label=a4&label=a5&label=a6&label=a7&label=a8&label=a9&label=b0", "label"}, // 11 labels
 		{"?q=a&q=b", "q"},
 		{"?q=" + strings.Repeat("a", 201), "q"},
 		{"?limit=0", "limit"},
@@ -520,6 +545,48 @@ func TestTickets_ActivityPagination(t *testing.T) {
 	wantKeys(t, "token actor", actor, "id", "type", "name", "bot", "owner_name")
 }
 
+// ---- label add/remove ----
+
+func TestTickets_ChangeLabels(t *testing.T) {
+	w := tkSetup(t)
+	bug, ui := w.label(t, "WEB", "bug"), w.label(t, "WEB", "ui")
+	foreign := w.label(t, "OTH", "foreign")
+	tk := w.mk(t, map[string]any{"title": "A", "labels": []string{bug}})
+	path := "/api/v1/tickets/WEB-1/labels"
+	_ = tk
+	names := func(r *Resp) []string {
+		var out []string
+		for _, l := range r.JSON(t)["labels"].([]any) {
+			out = append(out, l.(map[string]any)["name"].(string))
+		}
+		return out
+	}
+	r := w.h.Do(t, "PATCH", path, map[string]any{"add": []string{ui}}, As(w.editor))
+	if r.Code != 200 || !tkEq(names(r), []string{"bug", "ui"}) {
+		t.Fatalf("add: %d %s", r.Code, r.Body)
+	}
+	r = w.h.Do(t, "PATCH", path, map[string]any{"add": []string{bug}, "remove": []string{ui}}, As(w.editor))
+	if r.Code != 200 || !tkEq(names(r), []string{"bug"}) {
+		t.Fatalf("swap: %d %s", r.Code, r.Body)
+	}
+	wantKeys(t, "ticket", r.JSON(t), "id", "project_id", "project_key", "number", "ref", "title", "description", "status",
+		"priority", "assignee", "labels", "position", "due_date", "comment_count", "created_at", "updated_at")
+
+	tkFieldErr(t, w.h.Do(t, "PATCH", path, map[string]any{}, As(w.editor)), "add")
+	tkFieldErr(t, w.h.Do(t, "PATCH", path, map[string]any{"add": []string{foreign}}, As(w.editor)), "add")
+	tkFieldErr(t, w.h.Do(t, "PATCH", path, map[string]any{"add": []string{bug}, "remove": []string{bug}}, As(w.editor)), "labels")
+	tkWant(t, w.h.Do(t, "PATCH", path, map[string]any{"add": "x"}, As(w.editor)), 400, "bad_request")
+	tkWant(t, w.h.Do(t, "PATCH", path, map[string]any{"add": []string{ui}, "x": 1}, As(w.editor)), 400, "bad_request")
+	tkWant(t, w.h.Do(t, "PATCH", "/api/v1/tickets/WEB-77/labels", map[string]any{"add": []string{ui}}, As(w.editor)), 404, "not_found")
+	tkWant(t, w.h.Do(t, "PATCH", path, map[string]any{"add": []string{ui}}, As(w.viewer)), 403, "forbidden")
+	tkWant(t, w.h.Do(t, "PATCH", path, map[string]any{"add": []string{ui}}, As(w.outsider)), 404, "not_found")
+	tkWant(t, w.h.Do(t, "PATCH", path, map[string]any{"add": []string{ui}}, Bearer(w.readTok)), 403, "insufficient_scope")
+	tkWant(t, w.h.Do(t, "PATCH", path, map[string]any{"add": []string{ui}}, Bearer(w.limOt)), 404, "not_found")
+	if r := w.h.Do(t, "PATCH", path, map[string]any{"add": []string{ui}}, Bearer(w.limOwn)); r.Code != 200 {
+		t.Fatalf("limited token on its project: %d %s", r.Code, r.Body)
+	}
+}
+
 // ---- move ----
 
 func TestTickets_Move(t *testing.T) {
@@ -580,6 +647,29 @@ func TestTickets_Move(t *testing.T) {
 	if first := tkItems(t, w.h.Do(t, "GET", "/api/v1/tickets/WEB-1/activity", nil, As(w.owner)))[0]; first["action"] != "moved" {
 		t.Errorf("want moved activity, got %v", first)
 	}
+}
+
+func TestTickets_MoveExpectedStatus(t *testing.T) {
+	w := tkSetup(t)
+	w.mk(t, map[string]any{"title": "A", "status": "todo"})
+	move := func(body map[string]any) *Resp {
+		return w.h.Do(t, "POST", "/api/v1/tickets/WEB-1/move", body, As(w.editor))
+	}
+	r := move(map[string]any{"status": "in_progress", "expected_status": "backlog"})
+	tkWant(t, r, 409, "status_conflict")
+	if !strings.Contains(string(r.Body), "Ticket is in todo, not backlog") {
+		t.Errorf("message: %s", r.Body)
+	}
+	if got := w.h.Do(t, "GET", "/api/v1/tickets/WEB-1", nil, As(w.owner)).JSON(t)["status"]; got != "todo" {
+		t.Errorf("conflict moved the ticket: %v", got)
+	}
+	tkFieldErr(t, move(map[string]any{"status": "done", "expected_status": "bogus"}), "expected_status")
+	r = move(map[string]any{"status": "in_progress", "expected_status": "todo"})
+	if r.Code != 200 || r.JSON(t)["status"] != "in_progress" {
+		t.Errorf("match: %d %s", r.Code, r.Body)
+	}
+	// retry of a successful claim conflicts
+	tkWant(t, move(map[string]any{"status": "in_progress", "expected_status": "todo"}), 409, "status_conflict")
 }
 
 func TestTickets_MoveRenumbered(t *testing.T) {

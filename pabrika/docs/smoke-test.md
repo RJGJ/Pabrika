@@ -19,7 +19,7 @@ Source: `specs/phase-6-ship.md` section 5. Steps marked **[Docker]** need Docker
 | 3a Signup disabled [Docker] | NOT RUN in a container; verified on the native binary |
 | 4 Create a user via CLI [Docker] | NOT RUN in a container; verified on the native binary |
 | 5 Use the app (browser) | partial: login, board, ticket panel with markdown, settings pages, zero CSP violations; drag, second window and password change not done here |
-| 6 Connect an agent over MCP | partial: raw JSON-RPC over curl (14 tools, create_ticket); `claude mcp add` itself NOT RUN |
+| 6 Connect an agent over MCP | partial: raw JSON-RPC over curl (14 tools at the time of the run; 16 now, create_ticket); `claude mcp add` itself NOT RUN |
 | 7 Persistence [Docker] | NOT RUN in Docker; restart on the same database file verified natively |
 | 8 Read-only root and shutdown [Docker] | NOT RUN (`docker stop` and exit 137 untested); graceful shutdown with an open stream verified natively |
 | 9 Proxy check [Docker] | NOT RUN |
@@ -111,7 +111,7 @@ In Claude Code: list projects, create a ticket in `WEB`, move it to In progress,
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/tickets/WEB-1/activity
 ```
 
-A read-scope token (second client entry) sees only the 5 read tools; the write token lists all 14. Clean up with `claude mcp remove pabrika`.
+A read-scope token (second client entry) sees only the 5 read tools; a comment-scope token sees 7; the write token lists all 16. Clean up with `claude mcp remove pabrika`.
 
 ## 7. Persistence [Docker]
 
@@ -194,7 +194,7 @@ Verified for real (all passed):
 - `ALLOW_SIGNUP=false`: signup 404, `/auth/config` is exactly `{"signup_enabled":false}`. Non-JSON login body 415. No CORS headers. Wrong password 401; right password 200 with an `HttpOnly` host-only `pb_session` cookie.
 - REST with the cookie: created project `WEB` and tickets, read them back.
 - Live updates: a `curl -N` stream on `/api/v1/projects/WEB/events` received `: connected` and `event: ticket.created`.
-- `/mcp` with a write token: no token 401, cookie only 401, foreign Origin 403, `initialize` works, `tools/list` returned 14 tools, `create_ticket` created `WEB-3` (visible over REST), `GET /mcp` 405.
+- `/mcp` with a write token: no token 401, cookie only 401, foreign Origin 403, `initialize` works, `tools/list` returned 14 tools (16 since agentic phase 3), `create_ticket` created `WEB-3` (visible over REST), `GET /mcp` 405.
 - Graceful shutdown with the SSE stream still open: the runner sent CTRL_BREAK (Go maps it to `os.Interrupt`; Windows has no SIGTERM). The process logged `shutting down`, `event stream closed ... reason=shutdown`, `stopped`, exited **0** within about 15 ms, and the curl stream ended. The port was closed afterwards.
 - Restart on the same database file: login, project, tickets and the API token (used over `/mcp`) were all still there; second shutdown also exited 0.
 - Browser (in-app browser) against the native server: login, board (Live), ticket panel with rendered markdown and a comment, project settings, account settings; the console showed no CSP "Refused to ..." message.

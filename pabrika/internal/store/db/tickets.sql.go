@@ -24,6 +24,22 @@ func (q *Queries) TicketAddLabel(ctx context.Context, arg TicketAddLabelParams) 
 	return err
 }
 
+const ticketAddLabelIfAbsent = `-- name: TicketAddLabelIfAbsent :exec
+INSERT INTO ticket_labels (ticket_id, label_id) VALUES (?, ?)
+ON CONFLICT (ticket_id, label_id) DO NOTHING
+`
+
+type TicketAddLabelIfAbsentParams struct {
+	TicketID string
+	LabelID  string
+}
+
+// Idempotent label add used by ChangeLabels: adding a label the ticket already has is a no-op.
+func (q *Queries) TicketAddLabelIfAbsent(ctx context.Context, arg TicketAddLabelIfAbsentParams) error {
+	_, err := q.db.ExecContext(ctx, ticketAddLabelIfAbsent, arg.TicketID, arg.LabelID)
+	return err
+}
+
 const ticketAllocateNumber = `-- name: TicketAllocateNumber :one
 
 UPDATE projects SET next_ticket_number = next_ticket_number + 1
@@ -332,20 +348,31 @@ WHERE t.project_id = ?1 AND t.deleted_at IS NULL
   AND (CAST(?3 AS TEXT) IS NULL OR t.priority = CAST(?3 AS TEXT))
   AND (CAST(?4 AS INTEGER) = 0 OR t.assignee_id IS NULL)
   AND (CAST(?5 AS TEXT) IS NULL OR t.assignee_id = CAST(?5 AS TEXT))
-  AND (CAST(?6 AS TEXT) IS NULL OR EXISTS (
-        SELECT 1 FROM ticket_labels tl WHERE tl.ticket_id = t.id AND tl.label_id = CAST(?6 AS TEXT)))
-  AND (CAST(?7 AS TEXT) IS NULL
-       OR instr(lower(t.title), lower(CAST(?7 AS TEXT))) > 0
-       OR instr(lower(t.description), lower(CAST(?7 AS TEXT))) > 0)
-  AND (CAST(?8 AS INTEGER) = 0
-       OR CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END > CAST(?9 AS INTEGER)
-       OR (CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END = CAST(?9 AS INTEGER)
-           AND t.position > CAST(?10 AS REAL))
-       OR (CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END = CAST(?9 AS INTEGER)
-           AND t.position = CAST(?10 AS REAL)
-           AND t.id > CAST(?11 AS TEXT)))
+  AND (CAST(?6 AS INTEGER) = 0 OR
+       (SELECT COUNT(DISTINCT tl.label_id) FROM ticket_labels tl
+        WHERE tl.ticket_id = t.id AND tl.label_id IN (
+          CAST(?7 AS TEXT),
+          CAST(?8 AS TEXT),
+          CAST(?9 AS TEXT),
+          CAST(?10 AS TEXT),
+          CAST(?11 AS TEXT),
+          CAST(?12 AS TEXT),
+          CAST(?13 AS TEXT),
+          CAST(?14 AS TEXT),
+          CAST(?15 AS TEXT),
+          CAST(?16 AS TEXT))) = CAST(?6 AS INTEGER))
+  AND (CAST(?17 AS TEXT) IS NULL
+       OR instr(lower(t.title), lower(CAST(?17 AS TEXT))) > 0
+       OR instr(lower(t.description), lower(CAST(?17 AS TEXT))) > 0)
+  AND (CAST(?18 AS INTEGER) = 0
+       OR CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END > CAST(?19 AS INTEGER)
+       OR (CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END = CAST(?19 AS INTEGER)
+           AND t.position > CAST(?20 AS REAL))
+       OR (CASE t.status WHEN 'backlog' THEN 0 WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END = CAST(?19 AS INTEGER)
+           AND t.position = CAST(?20 AS REAL)
+           AND t.id > CAST(?21 AS TEXT)))
 ORDER BY status_rank, t.position, t.id
-LIMIT ?12
+LIMIT ?22
 `
 
 type TicketListPageParams struct {
@@ -354,7 +381,17 @@ type TicketListPageParams struct {
 	Priority       *string
 	Unassigned     int64
 	AssigneeID     *string
-	LabelID        *string
+	LabelCount     int64
+	LabelID1       *string
+	LabelID2       *string
+	LabelID3       *string
+	LabelID4       *string
+	LabelID5       *string
+	LabelID6       *string
+	LabelID7       *string
+	LabelID8       *string
+	LabelID9       *string
+	LabelID10      *string
 	QueryText      *string
 	HasCursor      int64
 	CursorRank     int64
@@ -380,7 +417,10 @@ type TicketListPageRow struct {
 
 // Board order: status rank, position, id. Keyset predicate in expanded OR form (no row values).
 // description is intentionally not selected. query_text is a literal substring (instr, so no
-// LIKE wildcards to escape; lower() is ASCII-only, as the spec accepts).
+// LIKE wildcards to escape; lower() is ASCII-only, as the spec accepts). The label filter is AND:
+// label_count is the number of distinct ids given (0 = no filter) and label_id_1..10 are those ids
+// (unused slots NULL, which never match); a fixed arity because sqlc slices cannot be mixed safely
+// with the numbered parameters here.
 func (q *Queries) TicketListPage(ctx context.Context, arg TicketListPageParams) ([]TicketListPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, ticketListPage,
 		arg.ProjectID,
@@ -388,7 +428,17 @@ func (q *Queries) TicketListPage(ctx context.Context, arg TicketListPageParams) 
 		arg.Priority,
 		arg.Unassigned,
 		arg.AssigneeID,
-		arg.LabelID,
+		arg.LabelCount,
+		arg.LabelID1,
+		arg.LabelID2,
+		arg.LabelID3,
+		arg.LabelID4,
+		arg.LabelID5,
+		arg.LabelID6,
+		arg.LabelID7,
+		arg.LabelID8,
+		arg.LabelID9,
+		arg.LabelID10,
 		arg.QueryText,
 		arg.HasCursor,
 		arg.CursorRank,
@@ -428,6 +478,32 @@ func (q *Queries) TicketListPage(ctx context.Context, arg TicketListPageParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const ticketRemoveLabels = `-- name: TicketRemoveLabels :exec
+DELETE FROM ticket_labels WHERE ticket_id = ?1 AND label_id IN (/*SLICE:label_ids*/?)
+`
+
+type TicketRemoveLabelsParams struct {
+	TicketID string
+	LabelIds []string
+}
+
+// Removes the given labels from one ticket; labels it does not have are ignored.
+func (q *Queries) TicketRemoveLabels(ctx context.Context, arg TicketRemoveLabelsParams) error {
+	query := ticketRemoveLabels
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.TicketID)
+	if len(arg.LabelIds) > 0 {
+		for _, v := range arg.LabelIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:label_ids*/?", strings.Repeat(",?", len(arg.LabelIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:label_ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
 }
 
 const ticketSeedGetRaw = `-- name: TicketSeedGetRaw :one
@@ -517,6 +593,21 @@ func (q *Queries) TicketSoftDelete(ctx context.Context, arg TicketSoftDeletePara
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const ticketTouch = `-- name: TicketTouch :exec
+UPDATE tickets SET updated_at = ? WHERE id = ?
+`
+
+type TicketTouchParams struct {
+	UpdatedAt string
+	ID        string
+}
+
+// Bumps updated_at only (label changes that go through ChangeLabels).
+func (q *Queries) TicketTouch(ctx context.Context, arg TicketTouchParams) error {
+	_, err := q.db.ExecContext(ctx, ticketTouch, arg.UpdatedAt, arg.ID)
+	return err
 }
 
 const ticketUpdateFields = `-- name: TicketUpdateFields :exec
